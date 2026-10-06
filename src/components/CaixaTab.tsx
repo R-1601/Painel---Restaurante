@@ -1,0 +1,352 @@
+import { useMemo, useState } from 'react';
+import { Trash2, Settings, Search, Pencil, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { traduzErro } from '../lib/data';
+import {
+  type CaixaItem, type FormaPagamento, CANAIS_VENDA, CATEGORIAS_DESPESA, labelOf, todayISO, addDays, formatBRL, formatDatePt,
+  monthKeyOffset, monthRange, calcularTotais, valorLiquido, inRange,
+} from '../types';
+import {
+  PageHeader, EmptyState, IconBtn, PrimaryBtn, GhostBtn, Modal, FieldLabel, Th, Td, inputClass, TableWrap, Segmented, Stat,
+  MoneyInput, parseValor, useToast,
+} from './ui';
+
+interface CaixaTabProps {
+  caixa: CaixaItem[];
+  setCaixa: (next: CaixaItem[]) => void;
+  formasPagamento: FormaPagamento[];
+  setFormasPagamento: (next: FormaPagamento[]) => void;
+  podeConfigurar: boolean;
+}
+
+type Periodo = 'hoje' | 'ontem' | 'mes' | 'mes_passado' | 'custom';
+type Filtro = 'todos' | 'entrada' | 'saida';
+
+const formVazio = (tipo: 'entrada' | 'saida' = 'entrada') => ({
+  id: '' as string, data: todayISO(), descricao: '', valor: '', tipo,
+  canal: 'balcao', forma_pagamento: tipo === 'entrada' ? 'pix' : 'dinheiro', categoria: 'ingredientes',
+});
+
+export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPagamento, podeConfigurar }: CaixaTabProps) {
+  const toast = useToast();
+  const [periodo, setPeriodo] = useState<Periodo>('hoje');
+  const [de, setDe] = useState(todayISO());
+  const [ate, setAte] = useState(todayISO());
+  const [filtro, setFiltro] = useState<Filtro>('todos');
+  const [busca, setBusca] = useState('');
+  const [open, setOpen] = useState(false);
+  const [openTaxas, setOpenTaxas] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [form, setForm] = useState(formVazio());
+  const [taxasEdit, setTaxasEdit] = useState<Record<string, string>>({});
+
+  const [ini, fim] = useMemo((): [string, string] => {
+    const hoje = todayISO();
+    if (periodo === 'hoje') return [hoje, hoje];
+    if (periodo === 'ontem') { const o = addDays(hoje, -1); return [o, o]; }
+    if (periodo === 'mes') return monthRange(monthKeyOffset(0));
+    if (periodo === 'mes_passado') return monthRange(monthKeyOffset(-1));
+    return [de <= ate ? de : ate, de <= ate ? ate : de];
+  }, [periodo, de, ate]);
+
+  const doPeriodo = useMemo(() => caixa.filter((c) => inRange(c.data, ini, fim)), [caixa, ini, fim]);
+  const totais = useMemo(() => calcularTotais(doPeriodo), [doPeriodo]);
+
+  const lista = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    return doPeriodo
+      .filter((c) => filtro === 'todos' || c.tipo === filtro)
+      .filter((c) => !q || c.descricao.toLowerCase().includes(q))
+      .sort((a, b) => (a.data === b.data ? ((a.created_at || '') < (b.created_at || '') ? 1 : -1) : a.data < b.data ? 1 : -1));
+  }, [doPeriodo, filtro, busca]);
+
+  const formaLabel = (id?: string | null) => formasPagamento.find((f) => f.id === id)?.label || id || '—';
+
+  const abrirNovo = (tipo: 'entrada' | 'saida') => { setForm(formVazio(tipo)); setOpen(true); };
+  const abrirEdicao = (c: CaixaItem) => {
+    setForm({
+      id: c.id, data: c.data, descricao: c.descricao, valor: String(c.valor).replace('.', ','), tipo: c.tipo,
+      canal: c.canal || 'balcao', forma_pagamento: c.forma_pagamento || (c.tipo === 'entrada' ? 'pix' : 'dinheiro'), categoria: c.categoria || 'outro',
+    });
+    setOpen(true);
+  };
+
+  const salvar = async (continuar: boolean) => {
+    const valor = parseValor(form.valor);
+    if (!form.descricao.trim()) return toast('Informe uma descrição.', 'erro');
+    if (!(valor > 0)) return toast('Informe um valor maior que zero.', 'erro');
+
+    const original = form.id ? caixa.find((c) => c.id === form.id) : undefined;
+    const mesmaForma = original && original.tipo === 'entrada' && original.forma_pagamento === form.forma_pagamento;
+    const taxa = form.tipo === 'entrada'
+      ? (mesmaForma ? Number(original?.taxa || 0) : Number(formasPagamento.find((f) => f.id === form.forma_pagamento)?.taxa || 0))
+      : 0;
+
+    const registro = {
+      data: form.data,
+      descricao: form.descricao.trim(),
+      valor,
+      tipo: form.tipo,
+      forma_pagamento: form.forma_pagamento,
+      taxa,
+      canal: form.tipo === 'entrada' ? form.canal : null,
+      categoria: form.tipo === 'saida' ? form.categoria : null,
+    };
+
+    setSalvando(true);
+    const q = form.id
+      ? supabase.from('caixa').update(registro).eq('id', form.id).select().single()
+      : supabase.from('caixa').insert(registro).select().single();
+    const { data, error } = await q;
+    setSalvando(false);
+    if (error) return toast(traduzErro(error.message), 'erro');
+
+    const salvo = data as CaixaItem;
+    setCaixa(form.id ? caixa.map((c) => (c.id === form.id ? salvo : c)) : [salvo, ...caixa]);
+    toast(form.id ? 'Lançamento atualizado.' : `${form.tipo === 'entrada' ? 'Venda' : 'Despesa'} de ${formatBRL(valor)} lançada.`);
+    if (continuar && !form.id) setForm({ ...form, descricao: '', valor: '' });
+    else setOpen(false);
+  };
+
+  const remover = async (c: CaixaItem) => {
+    if (!window.confirm(`Excluir "${c.descricao}" (${formatBRL(c.valor)})?`)) return;
+    const { error } = await supabase.from('caixa').delete().eq('id', c.id);
+    if (error) return toast(traduzErro(error.message), 'erro');
+    setCaixa(caixa.filter((x) => x.id !== c.id));
+    toast('Lançamento excluído.');
+  };
+
+  const salvarTaxas = async () => {
+    const mudancas = Object.entries(taxasEdit)
+      .map(([id, v]) => ({ id, taxa: parseValor(v) }))
+      .filter((m) => !Number.isNaN(m.taxa) && m.taxa >= 0 && m.taxa <= 100);
+    for (const m of mudancas) {
+      const { error } = await supabase.from('formas_pagamento').update({ taxa: m.taxa }).eq('id', m.id);
+      if (error) return toast(traduzErro(error.message), 'erro');
+    }
+    setFormasPagamento(formasPagamento.map((f) => {
+      const m = mudancas.find((x) => x.id === f.id);
+      return m ? { ...f, taxa: m.taxa } : f;
+    }));
+    setTaxasEdit({});
+    setOpenTaxas(false);
+    toast('Taxas atualizadas. Valem para os próximos lançamentos.');
+  };
+
+  const tituloPeriodo = ini === fim ? formatDatePt(ini) : `${formatDatePt(ini)} a ${formatDatePt(fim)}`;
+
+  return (
+    <div>
+      <PageHeader title="Caixa" subtitle="Lance vendas e despesas do dia a dia.">
+        {podeConfigurar && <GhostBtn onClick={() => { setTaxasEdit({}); setOpenTaxas(true); }}><Settings size={15} /> Taxas</GhostBtn>}
+        <button onClick={() => abrirNovo('saida')} className="flex items-center gap-1.5 bg-white text-red border border-red/40 px-3.5 py-2.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-red-bg transition-colors">
+          <ArrowUpCircle size={16} /> Despesa
+        </button>
+        <PrimaryBtn onClick={() => abrirNovo('entrada')}>Venda</PrimaryBtn>
+      </PageHeader>
+
+      <div className="flex flex-col md:flex-row md:items-center gap-3 mb-4">
+        <Segmented<Periodo> value={periodo} onChange={setPeriodo} options={[
+          { id: 'hoje', label: 'Hoje' }, { id: 'ontem', label: 'Ontem' }, { id: 'mes', label: 'Este mês' },
+          { id: 'mes_passado', label: 'Mês passado' }, { id: 'custom', label: 'Período' },
+        ]} />
+        {periodo === 'custom' && (
+          <div className="flex items-center gap-2">
+            <input type="date" className={`${inputClass} md:w-[150px]`} value={de} onChange={(e) => setDe(e.target.value)} />
+            <span className="text-sm text-[#8A8270]">até</span>
+            <input type="date" className={`${inputClass} md:w-[150px]`} value={ate} onChange={(e) => setAte(e.target.value)} />
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <Stat label="Vendas (bruto)" value={formatBRL(totais.bruto)} hint={`${totais.vendas} venda${totais.vendas === 1 ? '' : 's'}`} color="#2F6F62" small />
+        <Stat label="Taxas" value={`− ${formatBRL(totais.taxas)}`} hint="maquininha / apps" color="#8A6D1E" small />
+        <Stat label="Despesas" value={`− ${formatBRL(totais.despesas)}`} color="#B33A3A" small />
+        <Stat label="Saldo do período" value={formatBRL(totais.saldo)} hint={tituloPeriodo} color={totais.saldo >= 0 ? '#2F6F62' : '#B33A3A'} small />
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-3 mb-3 md:items-center">
+        <Segmented<Filtro> value={filtro} onChange={setFiltro} options={[
+          { id: 'todos', label: 'Todos' }, { id: 'entrada', label: 'Vendas' }, { id: 'saida', label: 'Despesas' },
+        ]} />
+        <div className="relative md:w-[280px]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A8270]" />
+          <input className={`${inputClass} pl-9`} placeholder="Buscar descrição" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        </div>
+      </div>
+
+      {lista.length === 0 ? (
+        <TableWrap>
+          <EmptyState text={doPeriodo.length ? 'Nada encontrado com esse filtro.' : 'Nenhum lançamento neste período.'}>
+            {!doPeriodo.length && <PrimaryBtn onClick={() => abrirNovo('entrada')}>Lançar venda</PrimaryBtn>}
+          </EmptyState>
+        </TableWrap>
+      ) : (
+        <>
+          {/* Celular: cartões */}
+          <div className="md:hidden flex flex-col gap-2">
+            {lista.map((c) => (
+              <div key={c.id} className="bg-white border border-card-border rounded-lg p-3 flex items-center gap-3" onClick={() => abrirEdicao(c)}>
+                {c.tipo === 'entrada' ? <ArrowDownCircle size={22} className="text-teal shrink-0" /> : <ArrowUpCircle size={22} className="text-red shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm truncate">{c.descricao}</div>
+                  <div className="text-[12px] text-[#8A8270]">
+                    {formatDatePt(c.data)} · {c.tipo === 'entrada' ? `${labelOf(CANAIS_VENDA, c.canal)} · ${formaLabel(c.forma_pagamento)}` : labelOf(CATEGORIAS_DESPESA, c.categoria)}
+                  </div>
+                </div>
+                <div className="font-mono font-semibold text-sm whitespace-nowrap" style={{ color: c.tipo === 'entrada' ? '#2F6F62' : '#B33A3A' }}>
+                  {c.tipo === 'entrada' ? '+' : '−'} {formatBRL(c.valor)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: tabela */}
+          <div className="hidden md:block">
+            <TableWrap>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr><Th>Data</Th><Th>Descrição</Th><Th>Canal / Categoria</Th><Th>Pagamento</Th><Th right>Bruto</Th><Th right>Líquido</Th><Th></Th></tr>
+                </thead>
+                <tbody>
+                  {lista.map((c) => (
+                    <tr key={c.id} className="hover:bg-[#FCFAF4]">
+                      <Td className="font-mono text-[#8A8270] whitespace-nowrap">{formatDatePt(c.data)}</Td>
+                      <Td>{c.descricao}</Td>
+                      <Td>
+                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap"
+                          style={{ background: c.tipo === 'entrada' ? '#E7F0EC' : '#F6E7E5', color: c.tipo === 'entrada' ? '#2F6F62' : '#B33A3A' }}>
+                          {c.tipo === 'entrada' ? labelOf(CANAIS_VENDA, c.canal) : labelOf(CATEGORIAS_DESPESA, c.categoria)}
+                        </span>
+                      </Td>
+                      <Td className="text-[#8A8270] text-[13px] whitespace-nowrap">
+                        {formaLabel(c.forma_pagamento)}{c.tipo === 'entrada' && Number(c.taxa) > 0 ? ` (${String(c.taxa).replace(".", ",")}%)` : ''}
+                      </Td>
+                      <Td className="font-mono text-right whitespace-nowrap text-[#8A8270]">{formatBRL(c.valor)}</Td>
+                      <Td className="font-mono font-semibold text-right whitespace-nowrap" style={{ color: c.tipo === 'entrada' ? '#2F6F62' : '#B33A3A' }}>
+                        {c.tipo === 'entrada' ? '+' : '−'} {formatBRL(valorLiquido(c))}
+                      </Td>
+                      <Td>
+                        <div className="flex justify-end">
+                          <IconBtn onClick={() => abrirEdicao(c)} title="Editar"><Pencil size={15} /></IconBtn>
+                          <IconBtn onClick={() => remover(c)} color="#B33A3A" title="Excluir"><Trash2 size={15} /></IconBtn>
+                        </div>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrap>
+          </div>
+        </>
+      )}
+
+      {open && (
+        <Modal title={form.id ? 'Editar lançamento' : form.tipo === 'entrada' ? 'Nova venda' : 'Nova despesa'} onClose={() => setOpen(false)}>
+          <div className="flex gap-2">
+            {(['entrada', 'saida'] as const).map((t) => (
+              <button key={t} onClick={() => setForm({ ...form, tipo: t, forma_pagamento: t === 'saida' && !form.id ? 'dinheiro' : form.forma_pagamento })}
+                className="flex-1 py-2 rounded-md cursor-pointer font-semibold text-[13.5px] transition-colors"
+                style={{
+                  border: `1px solid ${form.tipo === t ? '#163A2E' : '#DAD2BC'}`,
+                  background: form.tipo === t ? '#163A2E' : '#FCFAF4',
+                  color: form.tipo === t ? '#F2EFE4' : '#20291F',
+                }}>
+                {t === 'entrada' ? 'Venda (entrada)' : 'Despesa (saída)'}
+              </button>
+            ))}
+          </div>
+
+          <FieldLabel>Valor (R$)</FieldLabel>
+          <MoneyInput value={form.valor} onChange={(v) => setForm({ ...form, valor: v })} autoFocus />
+
+          <FieldLabel>Descrição</FieldLabel>
+          <input className={inputClass} value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })}
+            placeholder={form.tipo === 'entrada' ? 'Ex: Mesa 4, Pedido iFood #123' : 'Ex: Compra de carnes'} />
+
+          {form.tipo === 'entrada' ? (
+            <>
+              <FieldLabel>Canal de venda</FieldLabel>
+              <div className="grid grid-cols-2 gap-1.5">
+                {CANAIS_VENDA.map((k) => (
+                  <Chip key={k.id} active={form.canal === k.id} onClick={() => setForm({ ...form, canal: k.id })}>{k.label}</Chip>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <FieldLabel>Categoria</FieldLabel>
+              <select className={inputClass} value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}>
+                {CATEGORIAS_DESPESA.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+              </select>
+            </>
+          )}
+
+          <FieldLabel>{form.tipo === 'entrada' ? 'Forma de pagamento' : 'Pago com'}</FieldLabel>
+          <div className="grid grid-cols-2 gap-1.5">
+            {formasPagamento.map((k) => (
+              <Chip key={k.id} active={form.forma_pagamento === k.id} onClick={() => setForm({ ...form, forma_pagamento: k.id })}>
+                {k.label}{form.tipo === 'entrada' && Number(k.taxa) > 0 ? <span className="opacity-70 font-normal"> · {String(k.taxa).replace(".", ",")}%</span> : null}
+              </Chip>
+            ))}
+          </div>
+          {form.tipo === 'saida' && form.forma_pagamento === 'dinheiro' && (
+            <p className="text-[12px] text-[#8A8270] mt-1.5 mb-0">Despesas em dinheiro são descontadas da gaveta no fechamento de caixa.</p>
+          )}
+
+          <FieldLabel>Data</FieldLabel>
+          <input className={inputClass} type="date" value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} />
+
+          <div className="mt-5 flex flex-col md:flex-row gap-2">
+            <PrimaryBtn onClick={() => salvar(false)} disabled={salvando} icon={false} full>{salvando ? 'Salvando...' : 'Salvar'}</PrimaryBtn>
+            {!form.id && (
+              <button onClick={() => salvar(true)} disabled={salvando}
+                className="w-full bg-white text-green-dark border border-green px-4 py-2.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-teal-bg disabled:opacity-60">
+                Salvar e lançar outra
+              </button>
+            )}
+          </div>
+          {form.id && (
+            <button
+              onClick={() => { const c = caixa.find((x) => x.id === form.id); if (c) { setOpen(false); remover(c); } }}
+              className="mt-3 w-full flex items-center justify-center gap-1.5 bg-transparent border-none text-red text-[13px] font-semibold cursor-pointer"
+            >
+              <Trash2 size={14} /> Excluir lançamento
+            </button>
+          )}
+        </Modal>
+      )}
+
+      {openTaxas && (
+        <Modal title="Taxas por forma de pagamento" onClose={() => setOpenTaxas(false)}>
+          <p className="text-[13px] text-[#8A8270] mt-0">Percentual descontado por cada forma de pagamento (maquininha, iFood etc.). A mudança vale para os próximos lançamentos.</p>
+          {formasPagamento.map((f) => (
+            <div key={f.id} className="flex items-center justify-between mb-2.5">
+              <span className="text-sm">{f.label}</span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  inputMode="decimal"
+                  className="w-[80px] px-2 py-1.5 rounded-md border border-card-border text-sm bg-[#FCFAF4] font-mono text-right focus:outline-none focus:border-green focus:ring-1 focus:ring-green"
+                  value={taxasEdit[f.id] ?? String(f.taxa).replace('.', ',')}
+                  onChange={(e) => setTaxasEdit({ ...taxasEdit, [f.id]: e.target.value.replace(/[^\d.,]/g, '') })}
+                />
+                <span className="text-[13px] text-[#8A8270]">%</span>
+              </div>
+            </div>
+          ))}
+          <div className="mt-4"><PrimaryBtn onClick={salvarTaxas} icon={false} full>Salvar taxas</PrimaryBtn></div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`py-2 px-2 rounded-md text-[13px] font-semibold cursor-pointer border transition-colors ${active ? 'bg-green text-[#F2EFE4] border-green' : 'bg-[#FCFAF4] text-ink border-card-border hover:border-green'}`}>
+      {children}
+    </button>
+  );
+}
