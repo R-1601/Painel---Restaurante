@@ -2,12 +2,15 @@ import { useMemo, useState } from 'react';
 import { Trash2, Check, Pencil, Repeat, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { traduzErro } from '../lib/data';
-import { type ContaItem, CATEGORIAS_CONTA, labelOf, todayISO, addDays, addMonths, situacaoConta, formatBRL, formatDatePt, monthKeyOffset } from '../types';
+import { type ContaItem, type CaixaItem, type FormaPagamento, CATEGORIAS_CONTA, labelOf, todayISO, addDays, addMonths, situacaoConta, formatBRL, formatDatePt, monthKeyOffset } from '../types';
 import { PageHeader, EmptyState, IconBtn, PrimaryBtn, Modal, FieldLabel, Th, Td, inputClass, TableWrap, Segmented, Stat, Badge, MoneyInput, parseValor, useToast } from './ui';
 
 interface ContasTabProps {
   contas: ContaItem[];
   setContas: (next: ContaItem[]) => void;
+  caixa: CaixaItem[];
+  setCaixa: (next: CaixaItem[]) => void;
+  formasPagamento: FormaPagamento[];
 }
 
 type Filtro = 'pendentes' | 'pagas' | 'todas';
@@ -15,13 +18,21 @@ type Filtro = 'pendentes' | 'pagas' | 'todas';
 const formVazio = () => ({ id: '', nome: '', categoria: 'fornecedor', valor: '', vencimento: todayISO(), recorrente: false });
 
 
-export default function ContasTab({ contas, setContas }: ContasTabProps) {
+export default function ContasTab({ contas, setContas, caixa, setCaixa, formasPagamento }: ContasTabProps) {
   const toast = useToast();
   const [filtro, setFiltro] = useState<Filtro>('pendentes');
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(formVazio());
   const [salvando, setSalvando] = useState(false);
+  const [pagando, setPagando] = useState<{ conta: ContaItem; forma: string; data: string } | null>(null);
   const hoje = todayISO();
+
+  // O banco cria/atualiza a saída no caixa ao pagar a conta; aqui só trazemos ela para a tela
+  const sincronizarCaixa = async (contaId: string, caixaAtual: CaixaItem[]) => {
+    const { data } = await supabase.from('caixa').select('*').eq('conta_id', contaId).maybeSingle();
+    const semEla = caixaAtual.filter((x) => x.conta_id !== contaId);
+    setCaixa(data ? [data as CaixaItem, ...semEla] : semEla);
+  };
 
   const pendentes = contas.filter((c) => c.status !== 'pago');
   const vencidas = pendentes.filter((c) => c.vencimento < hoje);
@@ -47,14 +58,23 @@ export default function ContasTab({ contas, setContas }: ContasTabProps) {
     setSalvando(false);
     if (error) return toast(traduzErro(error.message), 'erro');
     setContas(form.id ? contas.map((c) => (c.id === form.id ? (data as ContaItem) : c)) : [...contas, data as ContaItem]);
+    if (form.id && (data as ContaItem).status === 'pago') await sincronizarCaixa(form.id, caixa);
     toast(form.id ? 'Conta atualizada.' : 'Conta cadastrada.');
     setOpen(false);
   };
 
-  const pagar = async (c: ContaItem) => {
-    const { error } = await supabase.from('contas').update({ status: 'pago', pago_em: hoje }).eq('id', c.id);
+  const pagar = (c: ContaItem) => setPagando({ conta: c, forma: c.forma_pagamento || 'pix', data: hoje });
+
+  const confirmarPagamento = async () => {
+    if (!pagando) return;
+    const c = pagando.conta;
+    setSalvando(true);
+    const { error } = await supabase.from('contas').update({ status: 'pago', pago_em: pagando.data, forma_pagamento: pagando.forma }).eq('id', c.id);
+    setSalvando(false);
     if (error) return toast(traduzErro(error.message), 'erro');
-    let novas = contas.map((x) => (x.id === c.id ? { ...x, status: 'pago' as const, pago_em: hoje } : x));
+    setPagando(null);
+    let novas = contas.map((x) => (x.id === c.id ? { ...x, status: 'pago' as const, pago_em: pagando.data, forma_pagamento: pagando.forma } : x));
+    await sincronizarCaixa(c.id, caixa);
 
     // Conta recorrente: já cria a do próximo mês
     if (c.recorrente) {
@@ -65,17 +85,19 @@ export default function ContasTab({ contas, setContas }: ContasTabProps) {
           .insert({ nome: c.nome, categoria: c.categoria, valor: c.valor, vencimento: prox, status: 'pendente', recorrente: true })
           .select().single();
         if (e2) toast(traduzErro(e2.message), 'erro');
-        else { novas = [...novas, data as ContaItem]; toast(`Paga! A próxima (${formatDatePt(prox)}) já foi criada.`); setContas(novas); return; }
+        else { novas = [...novas, data as ContaItem]; toast(`Paga e lançada no caixa. A próxima (${formatDatePt(prox)}) já foi criada.`); setContas(novas); return; }
       }
     }
     setContas(novas);
-    toast('Conta marcada como paga.');
+    toast('Conta paga e lançada no caixa.');
   };
 
   const desfazerPagamento = async (c: ContaItem) => {
     const { error } = await supabase.from('contas').update({ status: 'pendente', pago_em: null }).eq('id', c.id);
     if (error) return toast(traduzErro(error.message), 'erro');
     setContas(contas.map((x) => (x.id === c.id ? { ...x, status: 'pendente' as const, pago_em: null } : x)));
+    setCaixa(caixa.filter((x) => x.conta_id !== c.id));
+    toast('Pagamento desfeito. A saída foi retirada do caixa.');
   };
 
   const remover = async (c: ContaItem) => {
@@ -202,6 +224,21 @@ export default function ContasTab({ contas, setContas }: ContasTabProps) {
               <Trash2 size={14} /> Excluir conta
             </button>
           )}
+        </Modal>
+      )}
+      {pagando && (
+        <Modal title={`Pagar: ${pagando.conta.nome}`} onClose={() => setPagando(null)}>
+          <p className="text-[14px] text-[#5A5344] mt-0">Valor: <b className="font-mono">{formatBRL(pagando.conta.valor)}</b></p>
+          <FieldLabel>Pago com</FieldLabel>
+          <select className={inputClass} value={pagando.forma} onChange={(e) => setPagando({ ...pagando, forma: e.target.value })}>
+            {formasPagamento.filter((f) => f.id !== 'ifood' && f.id !== 'rappi').map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+            <option value="boleto">Boleto / transferência</option>
+          </select>
+          {pagando.forma === 'dinheiro' && <p className="text-[12px] text-[#8A8270] mt-1.5 mb-0">Pagamento em dinheiro sai da gaveta e entra no fechamento do dia.</p>}
+          <FieldLabel>Data do pagamento</FieldLabel>
+          <input type="date" className={inputClass} value={pagando.data} onChange={(e) => setPagando({ ...pagando, data: e.target.value })} />
+          <p className="text-[12.5px] text-[#8A8270] mt-3 mb-0">A conta entra como despesa no caixa e no lucro do mês automaticamente.</p>
+          <div className="mt-4"><PrimaryBtn onClick={confirmarPagamento} disabled={salvando} icon={false} full>{salvando ? 'Salvando...' : 'Confirmar pagamento'}</PrimaryBtn></div>
         </Modal>
       )}
     </div>

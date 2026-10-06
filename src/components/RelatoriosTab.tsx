@@ -59,7 +59,7 @@ export default function RelatoriosTab({ caixa, formasPagamento }: Props) {
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   };
   const entradas = itens.filter((c) => c.tipo === 'entrada');
-  const saidas = itens.filter((c) => c.tipo === 'saida');
+  const saidas = itens.filter((c) => c.tipo === 'saida' && c.categoria !== 'sangria');
   const porCanal = agrupar(entradas, (c) => labelOf(CANAIS_VENDA, c.canal));
   const porForma = agrupar(entradas, (c) => formasPagamento.find((f) => f.id === c.forma_pagamento)?.label || c.forma_pagamento || '—');
   const porCategoria = agrupar(saidas, (c) => labelOf(CATEGORIAS_DESPESA, c.categoria));

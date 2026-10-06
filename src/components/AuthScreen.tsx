@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { Store, KeyRound, Mail } from 'lucide-react';
+import { Store, KeyRound, Mail, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { traduzErro } from '../lib/data';
 import { inputClass } from './ui';
 
-type Mode = 'login' | 'dono' | 'convite' | 'esqueci';
+export type Mode = 'login' | 'dono' | 'convite' | 'esqueci';
 
-export default function AuthScreen() {
-  const [mode, setMode] = useState<Mode>('login');
+export default function AuthScreen({ inicial = 'login', onVoltar }: { inicial?: Mode; onVoltar?: () => void }) {
+  const [mode, setMode] = useState<Mode>(inicial);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nome, setNome] = useState('');
@@ -83,6 +83,11 @@ export default function AuthScreen() {
   return (
     <div className="min-h-screen bg-paper flex items-center justify-center font-sans text-ink px-4 py-10">
       <div className="w-full max-w-[420px]">
+        {onVoltar && (
+          <button onClick={onVoltar} className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#6B6355] hover:text-green-dark bg-transparent border-none cursor-pointer p-0">
+            <ArrowLeft size={15} /> Voltar
+          </button>
+        )}
         <div className="text-center mb-7">
           <div className="w-14 h-14 rounded-2xl bg-green text-[#F2EFE4] flex items-center justify-center mx-auto mb-3"><Store size={26} /></div>
           <div className="font-serif text-[28px] font-bold text-green-dark leading-tight">Painel do Restaurante</div>
@@ -93,7 +98,7 @@ export default function AuthScreen() {
           {mode !== 'esqueci' && (
             <div className="flex gap-1 mb-5 bg-paper rounded-lg p-1">
               {tabBtn('login', 'Entrar')}
-              {tabBtn('dono', 'Criar conta')}
+              {tabBtn('dono', 'Testar grátis')}
               {tabBtn('convite', 'Tenho convite')}
             </div>
           )}
@@ -157,7 +162,7 @@ export default function AuthScreen() {
             )}
             {mode === 'dono' && (
               <p className="text-[11.5px] text-[#8A8270] m-0 leading-relaxed">
-                Depois do cadastro, seu restaurante é liberado assim que a assinatura for ativada.
+                Seu teste grátis de 15 dias começa na hora. Sem cartão de crédito.
               </p>
             )}
             {mode === 'convite' && (

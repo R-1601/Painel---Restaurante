@@ -15,7 +15,8 @@ import FechamentoTab from './components/FechamentoTab';
 import RelatoriosTab from './components/RelatoriosTab';
 import EquipeTab from './components/EquipeTab';
 import AdminTab from './components/AdminTab';
-import AuthScreen from './components/AuthScreen';
+import AuthScreen, { type Mode as AuthMode } from './components/AuthScreen';
+import Landing from './components/Landing';
 import { AcessoScreen, NovaSenhaScreen } from './components/WaitingScreen';
 
 export default function App() {
@@ -29,6 +30,14 @@ export default function App() {
 function Root() {
   const { loading, session, profile, restaurante, signOut, refresh } = useAuth();
   const [recuperando, setRecuperando] = useState(() => window.location.hash.includes('type=recovery'));
+  // Tela inicial para quem não está logado: apresentação. '#entrar' / '#cadastro' abrem direto o login/cadastro.
+  const [telaAuth, setTelaAuth] = useState<AuthMode | null>(() =>
+    window.location.hash === '#entrar' ? 'login' : window.location.hash === '#cadastro' ? 'dono' : null);
+  const abrirAuth = (m: AuthMode | null) => {
+    setTelaAuth(m);
+    window.history.replaceState(null, '', m ? (m === 'login' ? '#entrar' : '#cadastro') : window.location.pathname);
+    window.scrollTo(0, 0);
+  };
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => { if (event === 'PASSWORD_RECOVERY') setRecuperando(true); });
@@ -36,7 +45,12 @@ function Root() {
   }, []);
 
   if (loading) return <Splash text="Carregando..." />;
-  if (!session || !profile) return <AuthScreen />;
+  if (!session || !profile) {
+    if (!telaAuth) {
+      return <Landing onEntrar={() => abrirAuth('login')} onCadastrar={() => abrirAuth('dono')} />;
+    }
+    return <AuthScreen key={telaAuth} inicial={telaAuth} onVoltar={() => abrirAuth(null)} />;
+  }
   if (recuperando) {
     return <NovaSenhaScreen email={profile.email} onDone={() => { setRecuperando(false); window.history.replaceState(null, '', window.location.pathname); }} />;
   }
@@ -111,7 +125,8 @@ function Dashboard({ isAdmin, isDono, dadosLiberados, email, restaurante, onSign
       const [e, c, ct, fp] = await Promise.all([
         fetchAll<EstoqueItem>(() => supabase.from('estoque').select('*').order('nome')),
         fetchAll<CaixaItem>(() => supabase.from('caixa').select('*').gte('data', desde).order('data', { ascending: false }).order('created_at', { ascending: false })),
-        fetchAll<ContaItem>(() => supabase.from('contas').select('*').order('vencimento')),
+        // Contas a pagar: só o dono (o banco também bloqueia para funcionário)
+        isDono ? fetchAll<ContaItem>(() => supabase.from('contas').select('*').order('vencimento')) : Promise.resolve([] as ContaItem[]),
         fetchAll<FormaPagamento>(() => supabase.from('formas_pagamento').select('*').order('ordem')),
       ]);
       setEstoque(e);
@@ -123,11 +138,13 @@ function Dashboard({ isAdmin, isDono, dadosLiberados, email, restaurante, onSign
     } finally {
       setLoading(false);
     }
-  }, [dadosLiberados]);
+  }, [dadosLiberados, isDono]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
   const go = (id: TabId) => { setTab(id); setMenuOpen(false); window.scrollTo(0, 0); };
+
+  const caixaAtivo = useMemo(() => caixa.filter((c) => !c.excluido_em), [caixa]);
 
   if (loading) return <Splash text="Carregando painel..." />;
 
@@ -202,14 +219,14 @@ function Dashboard({ isAdmin, isDono, dadosLiberados, email, restaurante, onSign
               <button onClick={carregar} className="font-semibold bg-transparent border border-red/40 text-red rounded-md px-3 py-1 cursor-pointer">Tentar de novo</button>
             </div>
           )}
-          {tab === 'resumo' && <ResumoTab caixa={caixa} contas={contas} estoque={estoque} onNavigate={(t) => go(t as TabId)} />}
+          {tab === 'resumo' && <ResumoTab caixa={caixaAtivo} contas={contas} estoque={estoque} onNavigate={(t) => go(t as TabId)} />}
           {tab === 'caixa' && (
-            <CaixaTab caixa={caixa} setCaixa={setCaixa} formasPagamento={formasPagamento} setFormasPagamento={setFormasPagamento} podeConfigurar={isDono} />
+            <CaixaTab caixa={caixa} setCaixa={setCaixa} formasPagamento={formasPagamento} setFormasPagamento={setFormasPagamento} isDono={isDono} />
           )}
-          {tab === 'fechamento' && <FechamentoTab caixa={caixa} formasPagamento={formasPagamento} />}
-          {tab === 'relatorios' && <RelatoriosTab caixa={caixa} formasPagamento={formasPagamento} />}
+          {tab === 'fechamento' && <FechamentoTab caixa={caixaAtivo} formasPagamento={formasPagamento} isDono={isDono} />}
+          {tab === 'relatorios' && <RelatoriosTab caixa={caixaAtivo} formasPagamento={formasPagamento} />}
           {tab === 'estoque' && <EstoqueTab estoque={estoque} setEstoque={setEstoque} />}
-          {tab === 'contas' && <ContasTab contas={contas} setContas={setContas} />}
+          {tab === 'contas' && <ContasTab contas={contas} setContas={setContas} caixa={caixa} setCaixa={setCaixa} formasPagamento={formasPagamento} />}
           {tab === 'equipe' && restaurante && <EquipeTab restaurante={restaurante} onRefresh={onRefresh} />}
           {tab === 'admin' && isAdmin && <AdminTab />}
         </main>

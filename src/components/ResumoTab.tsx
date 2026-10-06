@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Clock, AlertTriangle, ArrowRight, TrendingUp, TrendingDown } from 'lucide-react';
 import {
   type CaixaItem, type ContaItem, type EstoqueItem, CANAIS_VENDA, formatBRL, formatDatePt, todayISO, addDays, monthKeyOffset, monthRange,
-  calcularTotais, inRange, pctVariacao, formatMonthPt, situacaoConta,
+  calcularTotais, inRange, pctVariacao, formatMonthPt, situacaoConta, porGrupoDespesa,
 } from '../types';
 import { Stat, Card, Badge } from './ui';
 
@@ -40,6 +40,7 @@ export default function ResumoTab({ caixa, contas, estoque, onNavigate }: Resumo
   const tHoje = useMemo(() => calcularTotais(caixa.filter((c) => c.data === hoje)), [caixa, hoje]);
   const tSemanaPassada = useMemo(() => calcularTotais(caixa.filter((c) => c.data === addDays(hoje, -7))), [caixa, hoje]);
   const tMes = useMemo(() => calcularTotais(caixa.filter((c) => inRange(c.data, iniMes, hoje))), [caixa, iniMes, hoje]);
+  const grupos = useMemo(() => porGrupoDespesa(caixa.filter((c) => inRange(c.data, iniMes, hoje))), [caixa, iniMes, hoje]);
   const tAntParcial = useMemo(() => calcularTotais(caixa.filter((c) => inRange(c.data, iniAnt, fimAntParcial))), [caixa, iniAnt, fimAntParcial]);
 
   const porCanal = useMemo(() => {
@@ -67,21 +68,25 @@ export default function ResumoTab({ caixa, contas, estoque, onNavigate }: Resumo
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <Stat label="Vendas hoje" value={formatBRL(tHoje.bruto)} color="#2F6F62" hint={<><Var p={pctVariacao(tHoje.bruto, tSemanaPassada.bruto)} /> vs. mesmo dia semana passada</>} />
         <Stat label="Vendas no mês" value={formatBRL(tMes.bruto)} hint={<><Var p={pctVariacao(tMes.bruto, tAntParcial.bruto)} /> vs. mês passado (até dia {diaDoMes})</>} />
-        <Stat label="Lucro no mês" value={formatBRL(tMes.saldo)} color={tMes.saldo >= 0 ? '#2F6F62' : '#B33A3A'} hint="vendas − taxas − despesas" />
+        <Stat label="Lucro no mês" value={formatBRL(tMes.saldo)} color={tMes.saldo >= 0 ? '#2F6F62' : '#B33A3A'} hint="já descontando taxas, custos e contas pagas" />
         <Stat label="Ticket médio" value={formatBRL(tMes.ticketMedio)} hint={`${tMes.vendas} vendas no mês`} />
       </div>
 
       <div className="flex gap-5 flex-col lg:flex-row mb-6">
         <div className="bg-white border border-dashed border-card-border rounded p-6 md:px-8 lg:w-[360px] font-mono shadow-sm shrink-0">
-          <div className="text-center text-xs tracking-widest text-[#8A8270] mb-4 uppercase">— Fechamento parcial do mês —</div>
+          <div className="text-center text-xs tracking-widest text-[#8A8270] mb-4 uppercase">— Resultado do mês (DRE) —</div>
           <Row label="Vendas (bruto)" value={formatBRL(tMes.bruto)} color="#2F6F62" />
-          <Row label="Taxas de pagamento" value={`− ${formatBRL(tMes.taxas)}`} color="#8A6D1E" />
-          <Row label="Vendas (líquido)" value={formatBRL(tMes.liquido)} color="#2F6F62" bold />
-          <Row label="Despesas" value={`− ${formatBRL(tMes.despesas)}`} color="#B33A3A" />
+          <Row label="− Taxas (iFood, maquininha)" value={formatBRL(tMes.taxas)} color="#8A6D1E" />
+          <Row label="= Receita líquida" value={formatBRL(tMes.liquido)} color="#2F6F62" bold />
+          <Row label="− Custo de mercadoria" value={formatBRL(grupos.cmv)} color="#B33A3A" />
+          <Row label="− Pessoal" value={formatBRL(grupos.pessoal)} color="#B33A3A" />
+          <Row label="− Despesas fixas" value={formatBRL(grupos.fixas)} color="#B33A3A" />
+          <Row label="− Outras despesas" value={formatBRL(grupos.outras)} color="#B33A3A" />
           <div className="border-t border-dashed border-card-border my-3" />
-          <Row label="Saldo" value={formatBRL(tMes.saldo)} bold color={tMes.saldo >= 0 ? '#2F6F62' : '#B33A3A'} />
+          <Row label="= Lucro" value={formatBRL(tMes.saldo)} bold color={tMes.saldo >= 0 ? '#2F6F62' : '#B33A3A'} />
+          {tMes.liquido > 0 && <Row label="Margem" value={`${((tMes.saldo / tMes.bruto) * 100).toFixed(1).replace('.', ',')}%`} />}
           <div className="border-t border-dashed border-card-border my-3" />
-          <Row label={`Mês passado até dia ${diaDoMes}`} value={formatBRL(tAntParcial.saldo)} />
+          <Row label={`Lucro mês passado até dia ${diaDoMes}`} value={formatBRL(tAntParcial.saldo)} />
           <Row label="Contas em aberto" value={formatBRL(totalPendente)} color="#8A6D1E" />
         </div>
 

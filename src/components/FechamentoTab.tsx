@@ -2,15 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Lock, Unlock, Printer, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { traduzErro } from '../lib/data';
-import { type CaixaItem, type Fechamento, type FormaPagamento, todayISO, formatBRL, formatDatePt, calcularTotais, valorTaxa } from '../types';
+import { type CaixaItem, type Fechamento, type FormaPagamento, todayISO, addDays, formatBRL, formatDatePt, calcularTotais, valorTaxa } from '../types';
 import { PageHeader, Card, Stat, FieldLabel, inputClass, MoneyInput, parseValor, PrimaryBtn, GhostBtn, Badge, Th, Td, TableWrap, EmptyState, useToast } from './ui';
 
 interface Props {
   caixa: CaixaItem[];
   formasPagamento: FormaPagamento[];
+  isDono: boolean;
 }
 
-export default function FechamentoTab({ caixa, formasPagamento }: Props) {
+export default function FechamentoTab({ caixa, formasPagamento, isDono }: Props) {
   const toast = useToast();
   const [data, setData] = useState(todayISO());
   const [fechamentos, setFechamentos] = useState<Fechamento[]>([]);
@@ -114,7 +115,7 @@ export default function FechamentoTab({ caixa, formasPagamento }: Props) {
   return (
     <div>
       <PageHeader title="Fechamento de caixa" subtitle="Abra o caixa com o troco, confira a gaveta no fim do dia e registre o fechamento.">
-        <input type="date" className={`${inputClass} md:w-[160px]`} value={data} max={todayISO()} onChange={(e) => setData(e.target.value)} />
+        <input type="date" className={`${inputClass} md:w-[160px]`} value={data} max={todayISO()} min={isDono ? undefined : addDays(todayISO(), -1)} onChange={(e) => setData(e.target.value)} />
         {fechado && <GhostBtn onClick={() => window.print()}><Printer size={15} /> Imprimir</GhostBtn>}
       </PageHeader>
 
@@ -193,7 +194,9 @@ export default function FechamentoTab({ caixa, formasPagamento }: Props) {
             Fechado em {new Date(atual.fechado_em || '').toLocaleString('pt-BR')}
             {atual.observacao && <> · <i>{atual.observacao}</i></>}
           </div>
-          <div className="print:hidden"><GhostBtn onClick={reabrir}><Unlock size={15} /> Reabrir</GhostBtn></div>
+          {isDono
+            ? <div className="print:hidden"><GhostBtn onClick={reabrir}><Unlock size={15} /> Reabrir</GhostBtn></div>
+            : <div className="text-[12.5px] text-[#8A8270]">Só o dono pode reabrir um caixa fechado.</div>}
         </Card>
       )}
 

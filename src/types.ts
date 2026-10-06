@@ -27,6 +27,11 @@ export interface CaixaItem {
   taxa?: number | null;
   categoria?: string | null;
   created_at?: string;
+  conta_id?: string | null;
+  criado_por?: string | null;
+  excluido_em?: string | null;
+  excluido_por?: string | null;
+  motivo_exclusao?: string | null;
 }
 
 export interface ContaItem {
@@ -38,6 +43,7 @@ export interface ContaItem {
   status: 'pendente' | 'pago';
   recorrente?: boolean;
   pago_em?: string | null;
+  forma_pagamento?: string | null;
 }
 
 export interface FormaPagamento {
@@ -93,7 +99,11 @@ export const CATEGORIAS_DESPESA = [
   { id: 'ingredientes', label: 'Ingredientes' },
   { id: 'bebidas', label: 'Bebidas' },
   { id: 'embalagem', label: 'Embalagem' },
+  { id: 'fornecedor', label: 'Fornecedor' },
   { id: 'funcionario', label: 'Funcionário' },
+  { id: 'aluguel', label: 'Aluguel' },
+  { id: 'contas_consumo', label: 'Água, luz, gás e internet' },
+  { id: 'impostos', label: 'Impostos' },
   { id: 'manutencao', label: 'Manutenção' },
   { id: 'limpeza', label: 'Limpeza' },
   { id: 'taxas_app', label: 'Taxa de app/plataforma' },
@@ -187,9 +197,35 @@ export interface Totais {
   ticketMedio: number;
 }
 
+/** Grupos do DRE simples. Sangria é só dinheiro saindo da gaveta: não é despesa. */
+export type GrupoDespesa = 'cmv' | 'pessoal' | 'fixas' | 'outras' | 'sangria';
+export const GRUPOS_DRE: { id: Exclude<GrupoDespesa, 'sangria'>; label: string }[] = [
+  { id: 'cmv', label: 'Custo de mercadoria (ingredientes, bebidas, embalagens)' },
+  { id: 'pessoal', label: 'Pessoal' },
+  { id: 'fixas', label: 'Despesas fixas (aluguel, contas, impostos)' },
+  { id: 'outras', label: 'Outras despesas' },
+];
+export function grupoDespesa(cat?: string | null): GrupoDespesa {
+  switch (cat) {
+    case 'ingredientes': case 'bebidas': case 'embalagem': case 'fornecedor': return 'cmv';
+    case 'funcionario': return 'pessoal';
+    case 'aluguel': case 'contas_consumo': case 'impostos': return 'fixas';
+    case 'sangria': return 'sangria';
+    default: return 'outras';
+  }
+}
+
+export function porGrupoDespesa(itens: CaixaItem[]) {
+  const g: Record<GrupoDespesa, number> = { cmv: 0, pessoal: 0, fixas: 0, outras: 0, sangria: 0 };
+  for (const c of itens) if (c.tipo === 'saida' && !c.excluido_em) g[grupoDespesa(c.categoria)] += Number(c.valor);
+  return g;
+}
+
 export function calcularTotais(itens: CaixaItem[]): Totais {
   let bruto = 0, taxas = 0, despesas = 0, vendas = 0;
   for (const c of itens) {
+    if (c.excluido_em) continue;
+    if (c.tipo === 'saida' && c.categoria === 'sangria') continue;
     if (c.tipo === 'entrada') {
       bruto += Number(c.valor);
       taxas += valorTaxa(c);

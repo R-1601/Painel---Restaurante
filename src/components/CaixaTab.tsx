@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Trash2, Settings, Search, Pencil, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { Trash2, Settings, Search, Pencil, ArrowDownCircle, ArrowUpCircle, Receipt, Ban } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { traduzErro } from '../lib/data';
 import {
@@ -16,18 +16,18 @@ interface CaixaTabProps {
   setCaixa: (next: CaixaItem[]) => void;
   formasPagamento: FormaPagamento[];
   setFormasPagamento: (next: FormaPagamento[]) => void;
-  podeConfigurar: boolean;
+  isDono: boolean;
 }
 
 type Periodo = 'hoje' | 'ontem' | 'mes' | 'mes_passado' | 'custom';
-type Filtro = 'todos' | 'entrada' | 'saida';
+type Filtro = 'todos' | 'entrada' | 'saida' | 'excluidos';
 
 const formVazio = (tipo: 'entrada' | 'saida' = 'entrada') => ({
   id: '' as string, data: todayISO(), descricao: '', valor: '', tipo,
   canal: 'balcao', forma_pagamento: tipo === 'entrada' ? 'pix' : 'dinheiro', categoria: 'ingredientes',
 });
 
-export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPagamento, podeConfigurar }: CaixaTabProps) {
+export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPagamento, isDono }: CaixaTabProps) {
   const toast = useToast();
   const [periodo, setPeriodo] = useState<Periodo>('hoje');
   const [de, setDe] = useState(todayISO());
@@ -39,6 +39,7 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
   const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState(formVazio());
   const [taxasEdit, setTaxasEdit] = useState<Record<string, string>>({});
+  const [excluir, setExcluir] = useState<{ item: CaixaItem; motivo: string } | null>(null);
 
   const [ini, fim] = useMemo((): [string, string] => {
     const hoje = todayISO();
@@ -49,21 +50,26 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
     return [de <= ate ? de : ate, de <= ate ? ate : de];
   }, [periodo, de, ate]);
 
-  const doPeriodo = useMemo(() => caixa.filter((c) => inRange(c.data, ini, fim)), [caixa, ini, fim]);
+  const doPeriodoTodos = useMemo(() => caixa.filter((c) => inRange(c.data, ini, fim)), [caixa, ini, fim]);
+  const doPeriodo = useMemo(() => doPeriodoTodos.filter((c) => !c.excluido_em), [doPeriodoTodos]);
+  const excluidosPeriodo = doPeriodoTodos.length - doPeriodo.length;
   const totais = useMemo(() => calcularTotais(doPeriodo), [doPeriodo]);
 
   const lista = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return doPeriodo
-      .filter((c) => filtro === 'todos' || c.tipo === filtro)
+    const base = filtro === 'excluidos' ? doPeriodoTodos.filter((c) => c.excluido_em) : doPeriodo;
+    return base
+      .filter((c) => filtro === 'todos' || filtro === 'excluidos' || c.tipo === filtro)
       .filter((c) => !q || c.descricao.toLowerCase().includes(q))
       .sort((a, b) => (a.data === b.data ? ((a.created_at || '') < (b.created_at || '') ? 1 : -1) : a.data < b.data ? 1 : -1));
-  }, [doPeriodo, filtro, busca]);
+  }, [doPeriodo, doPeriodoTodos, filtro, busca]);
 
-  const formaLabel = (id?: string | null) => formasPagamento.find((f) => f.id === id)?.label || id || '—';
+  const formaLabel = (id?: string | null) => formasPagamento.find((f) => f.id === id)?.label || (id === 'boleto' ? 'Boleto/transferência' : id) || '—';
 
   const abrirNovo = (tipo: 'entrada' | 'saida') => { setForm(formVazio(tipo)); setOpen(true); };
   const abrirEdicao = (c: CaixaItem) => {
+    if (!isDono || c.excluido_em) return;
+    if (c.conta_id) { toast('Este lançamento vem de uma conta paga. Altere pela aba Contas a pagar.', 'erro'); return; }
     setForm({
       id: c.id, data: c.data, descricao: c.descricao, valor: String(c.valor).replace('.', ','), tipo: c.tipo,
       canal: c.canal || 'balcao', forma_pagamento: c.forma_pagamento || (c.tipo === 'entrada' ? 'pix' : 'dinheiro'), categoria: c.categoria || 'outro',
@@ -108,12 +114,23 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
     else setOpen(false);
   };
 
-  const remover = async (c: CaixaItem) => {
-    if (!window.confirm(`Excluir "${c.descricao}" (${formatBRL(c.valor)})?`)) return;
-    const { error } = await supabase.from('caixa').delete().eq('id', c.id);
+  const remover = (c: CaixaItem) => {
+    if (c.conta_id) { toast('Este lançamento vem de uma conta paga. Desfaça o pagamento na aba Contas a pagar.', 'erro'); return; }
+    setExcluir({ item: c, motivo: '' });
+  };
+
+  const confirmarExclusao = async () => {
+    if (!excluir) return;
+    if (!excluir.motivo.trim()) return toast('Informe o motivo da exclusão.', 'erro');
+    setSalvando(true);
+    const { error } = await supabase.rpc('excluir_lancamento', { p_id: excluir.item.id, p_motivo: excluir.motivo.trim() });
+    setSalvando(false);
     if (error) return toast(traduzErro(error.message), 'erro');
-    setCaixa(caixa.filter((x) => x.id !== c.id));
-    toast('Lançamento excluído.');
+    const agora = new Date().toISOString();
+    setCaixa(caixa.map((x) => (x.id === excluir.item.id ? { ...x, excluido_em: agora, motivo_exclusao: excluir.motivo.trim() } : x)));
+    setExcluir(null);
+    setOpen(false);
+    toast('Lançamento excluído. Ele continua no histórico de excluídos.');
   };
 
   const salvarTaxas = async () => {
@@ -138,7 +155,7 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
   return (
     <div>
       <PageHeader title="Caixa" subtitle="Lance vendas e despesas do dia a dia.">
-        {podeConfigurar && <GhostBtn onClick={() => { setTaxasEdit({}); setOpenTaxas(true); }}><Settings size={15} /> Taxas</GhostBtn>}
+        {isDono && <GhostBtn onClick={() => { setTaxasEdit({}); setOpenTaxas(true); }}><Settings size={15} /> Taxas</GhostBtn>}
         <button onClick={() => abrirNovo('saida')} className="flex items-center gap-1.5 bg-white text-red border border-red/40 px-3.5 py-2.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-red-bg transition-colors">
           <ArrowUpCircle size={16} /> Despesa
         </button>
@@ -146,10 +163,10 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
       </PageHeader>
 
       <div className="flex flex-col md:flex-row md:items-center gap-3 mb-4">
-        <Segmented<Periodo> value={periodo} onChange={setPeriodo} options={[
+        <Segmented<Periodo> value={periodo} onChange={setPeriodo} options={isDono ? [
           { id: 'hoje', label: 'Hoje' }, { id: 'ontem', label: 'Ontem' }, { id: 'mes', label: 'Este mês' },
           { id: 'mes_passado', label: 'Mês passado' }, { id: 'custom', label: 'Período' },
-        ]} />
+        ] : [{ id: 'hoje', label: 'Hoje' }, { id: 'ontem', label: 'Ontem' }]} />
         {periodo === 'custom' && (
           <div className="flex items-center gap-2">
             <input type="date" className={`${inputClass} md:w-[150px]`} value={de} onChange={(e) => setDe(e.target.value)} />
@@ -169,6 +186,7 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
       <div className="flex flex-col md:flex-row gap-3 mb-3 md:items-center">
         <Segmented<Filtro> value={filtro} onChange={setFiltro} options={[
           { id: 'todos', label: 'Todos' }, { id: 'entrada', label: 'Vendas' }, { id: 'saida', label: 'Despesas' },
+          ...(isDono && excluidosPeriodo > 0 ? [{ id: 'excluidos' as Filtro, label: `Excluídos (${excluidosPeriodo})` }] : []),
         ]} />
         <div className="relative md:w-[280px]">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A8270]" />
@@ -190,7 +208,8 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
               <div key={c.id} className="bg-white border border-card-border rounded-lg p-3 flex items-center gap-3" onClick={() => abrirEdicao(c)}>
                 {c.tipo === 'entrada' ? <ArrowDownCircle size={22} className="text-teal shrink-0" /> : <ArrowUpCircle size={22} className="text-red shrink-0" />}
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm truncate">{c.descricao}</div>
+                  <div className={`font-semibold text-sm truncate ${c.excluido_em ? 'line-through text-[#8A8270]' : ''}`}>{c.descricao}</div>
+                  {c.excluido_em && <div className="text-[12px] text-red">Excluído: {c.motivo_exclusao}</div>}
                   <div className="text-[12px] text-[#8A8270]">
                     {formatDatePt(c.data)} · {c.tipo === 'entrada' ? `${labelOf(CANAIS_VENDA, c.canal)} · ${formaLabel(c.forma_pagamento)}` : labelOf(CATEGORIAS_DESPESA, c.categoria)}
                   </div>
@@ -213,7 +232,15 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
                   {lista.map((c) => (
                     <tr key={c.id} className="hover:bg-[#FCFAF4]">
                       <Td className="font-mono text-[#8A8270] whitespace-nowrap">{formatDatePt(c.data)}</Td>
-                      <Td>{c.descricao}</Td>
+                      <Td>
+                        <div className={c.excluido_em ? 'line-through text-[#8A8270]' : ''}>{c.descricao}</div>
+                        {c.conta_id && <div className="text-[11.5px] text-[#8A8270] flex items-center gap-1 mt-0.5"><Receipt size={11} /> gerado pela conta paga</div>}
+                        {c.excluido_em && (
+                          <div className="text-[12px] text-red flex items-center gap-1 mt-0.5">
+                            <Ban size={11} /> Excluído em {new Date(c.excluido_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}: {c.motivo_exclusao}
+                          </div>
+                        )}
+                      </Td>
                       <Td>
                         <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap"
                           style={{ background: c.tipo === 'entrada' ? '#E7F0EC' : '#F6E7E5', color: c.tipo === 'entrada' ? '#2F6F62' : '#B33A3A' }}>
@@ -228,10 +255,12 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
                         {c.tipo === 'entrada' ? '+' : '−'} {formatBRL(valorLiquido(c))}
                       </Td>
                       <Td>
-                        <div className="flex justify-end">
-                          <IconBtn onClick={() => abrirEdicao(c)} title="Editar"><Pencil size={15} /></IconBtn>
-                          <IconBtn onClick={() => remover(c)} color="#B33A3A" title="Excluir"><Trash2 size={15} /></IconBtn>
-                        </div>
+                        {isDono && !c.excluido_em && !c.conta_id && (
+                          <div className="flex justify-end">
+                            <IconBtn onClick={() => abrirEdicao(c)} title="Editar"><Pencil size={15} /></IconBtn>
+                            <IconBtn onClick={() => remover(c)} color="#B33A3A" title="Excluir"><Trash2 size={15} /></IconBtn>
+                          </div>
+                        )}
                       </Td>
                     </tr>
                   ))}
@@ -296,7 +325,7 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
           )}
 
           <FieldLabel>Data</FieldLabel>
-          <input className={inputClass} type="date" value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} />
+          <input className={inputClass} type="date" value={form.data} min={isDono ? undefined : addDays(todayISO(), -1)} max={isDono ? undefined : todayISO()} onChange={(e) => setForm({ ...form, data: e.target.value })} />
 
           <div className="mt-5 flex flex-col md:flex-row gap-2">
             <PrimaryBtn onClick={() => salvar(false)} disabled={salvando} icon={false} full>{salvando ? 'Salvando...' : 'Salvar'}</PrimaryBtn>
@@ -315,6 +344,21 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
               <Trash2 size={14} /> Excluir lançamento
             </button>
           )}
+        </Modal>
+      )}
+
+      {excluir && (
+        <Modal title="Excluir lançamento" onClose={() => setExcluir(null)}>
+          <p className="text-[14px] text-[#5A5344] mt-0">
+            <b>{excluir.item.descricao}</b> · {formatBRL(excluir.item.valor)} · {formatDatePt(excluir.item.data)}
+          </p>
+          <p className="text-[13px] text-[#8A8270]">O lançamento sai das contas, mas fica guardado no histórico de excluídos com o motivo.</p>
+          <FieldLabel>Motivo</FieldLabel>
+          <input className={inputClass} autoFocus value={excluir.motivo} onChange={(e) => setExcluir({ ...excluir, motivo: e.target.value })} placeholder="Ex: lançado em dobro, valor errado" />
+          <button onClick={confirmarExclusao} disabled={salvando}
+            className="mt-5 w-full bg-red text-white border-none px-4 py-2.5 rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
+            {salvando ? 'Excluindo...' : 'Excluir lançamento'}
+          </button>
         </Modal>
       )}
 
