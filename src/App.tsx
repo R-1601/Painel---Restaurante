@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  LayoutDashboard, Package, Wallet, Receipt, ShieldCheck, LogOut, Lock, BarChart3, Users, Menu, X, Store,
+  LayoutDashboard, Package, Wallet, Receipt, ShieldCheck, LogOut, Lock, BarChart3, Users, Store, MoreHorizontal, AlertCircle,
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { useAuth, situacaoAcesso } from './lib/auth';
-import { fetchAll } from './lib/data';
+import { fetchAll, traduzErro } from './lib/data';
 import { type EstoqueItem, type CaixaItem, type ContaItem, type FormaPagamento, type Restaurante, todayISO, addMonths } from './types';
-import { ToastProvider } from './components/ui';
+import { ToastProvider, ConfirmProvider, Modal, Esqueleto } from './components/ui';
 import ResumoTab from './components/ResumoTab';
 import EstoqueTab from './components/EstoqueTab';
 import CaixaTab from './components/CaixaTab';
@@ -22,7 +22,9 @@ import { AcessoScreen, NovaSenhaScreen } from './components/WaitingScreen';
 export default function App() {
   return (
     <ToastProvider>
-      <Root />
+      <ConfirmProvider>
+        <Root />
+      </ConfirmProvider>
     </ToastProvider>
   );
 }
@@ -79,12 +81,32 @@ function Root() {
 
 function Splash({ text }: { text: string }) {
   return (
-    <div className="bg-paper min-h-screen flex items-center justify-center font-sans text-ink gap-3">
-      <div className="w-5 h-5 border-2 border-green border-t-transparent rounded-full animate-spin" />
-      {text}
+    <div className="bg-pele min-h-[100dvh] flex flex-col items-center justify-center font-sans text-pimenta-3 gap-4" role="status">
+      <div className="w-12 h-12 rounded-2xl bg-urucum text-white flex items-center justify-center animate-pulse"><Store size={22} /></div>
+      <span className="text-[14px]">{text}</span>
     </div>
   );
 }
+
+/** Carregando o painel: blocos no formato dos cartões e da lista que vão aparecer. */
+function PainelCarregando() {
+  return (
+    <div role="status" aria-label="Carregando seus dados">
+      <Esqueleto className="h-9 w-48 mb-2" />
+      <Esqueleto className="h-4 w-64 mb-6" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        {[0, 1, 2, 3].map((i) => <Esqueleto key={i} className="h-[104px] rounded-2xl" />)}
+      </div>
+      <div className="flex flex-col lg:flex-row gap-5">
+        <Esqueleto className="h-[320px] lg:w-[360px] rounded-2xl" />
+        <Esqueleto className="h-[240px] flex-1 rounded-2xl" />
+      </div>
+    </div>
+  );
+}
+
+// Nomes curtos para a barra de baixo do celular
+const ROTULO_CURTO: Partial<Record<TabId, string>> = { contas: 'Contas', equipe: 'Equipe', admin: 'Admin' };
 
 type TabId = 'resumo' | 'caixa' | 'fechamento' | 'relatorios' | 'estoque' | 'contas' | 'equipe' | 'admin';
 
@@ -109,6 +131,7 @@ function Dashboard({ isAdmin, isDono, dadosLiberados, email, restaurante, onSign
 
   const [tab, setTab] = useState<TabId>(tabs[0]?.id || 'admin');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [tentando, setTentando] = useState(false);
   const [loading, setLoading] = useState(dadosLiberados);
   const [erro, setErro] = useState<string | null>(null);
   const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
@@ -144,9 +167,23 @@ function Dashboard({ isAdmin, isDono, dadosLiberados, email, restaurante, onSign
 
   const go = (id: TabId) => { setTab(id); setMenuOpen(false); window.scrollTo(0, 0); };
 
+  // Barra do navegador no celular na mesma cor do topo do painel
+  useEffect(() => {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!meta) return;
+    const antes = meta.content;
+    meta.content = '#3A2318';
+    return () => { meta.content = antes; };
+  }, []);
+
+  const tentarDeNovo = async () => { setTentando(true); await carregar(); setTentando(false); };
+
   const caixaAtivo = useMemo(() => caixa.filter((c) => !c.excluido_em), [caixa]);
 
-  if (loading) return <Splash text="Carregando painel..." />;
+  // Funcionário vê só as abas que tem acesso (Caixa, Fechamento, Estoque)
+  const barra = tabs.slice(0, 3);
+  const resto = tabs.slice(3);
+  const maisAtivo = resto.some((t) => t.id === tab);
 
   const nav = (
     <>
@@ -157,7 +194,8 @@ function Dashboard({ isAdmin, isDono, dadosLiberados, email, restaurante, onSign
           <button
             key={t.id}
             onClick={() => go(t.id)}
-            className={`flex items-center gap-2.5 w-full py-3 px-6 ${active ? 'bg-paper text-green-dark md:rounded-l-lg' : 'text-sidebar-text hover:text-sidebar-active'} border-none cursor-pointer text-[14.5px] font-semibold text-left transition-colors`}
+            aria-current={active ? 'page' : undefined}
+            className={`flex items-center gap-2.5 w-full py-3 px-6 ${active ? 'bg-pele text-urucum md:rounded-l-2xl' : 'text-sidebar-text hover:text-sidebar-active'} border-none cursor-pointer text-[14.5px] font-semibold text-left transition-colors`}
           >
             <Icon size={17} strokeWidth={2} />
             {t.label}
@@ -178,47 +216,44 @@ function Dashboard({ isAdmin, isDono, dadosLiberados, email, restaurante, onSign
 
   const brand = (
     <div className="flex items-center gap-2.5 min-w-0">
-      <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center shrink-0"><Store size={18} /></div>
+      <div className="w-9 h-9 rounded-xl bg-urucum text-white flex items-center justify-center shrink-0"><Store size={18} /></div>
       <div className="min-w-0">
-        <div className="font-serif text-[17px] font-bold leading-tight truncate">{restaurante?.nome || 'Painel do Restaurante'}</div>
+        <div className="font-display text-[18px] leading-tight break-words">{restaurante?.nome || 'Painel do Restaurante'}</div>
         <div className="text-[11px] text-sidebar-text">Painel do Restaurante</div>
       </div>
     </div>
   );
 
   return (
-    <div className="bg-paper min-h-screen text-ink font-sans">
-      {/* Topo no celular */}
-      <header className="md:hidden sticky top-0 z-40 bg-green text-[#F2EFE4] px-4 py-3 flex items-center justify-between gap-3">
+    <div className="bg-pele min-h-screen text-pimenta font-sans">
+      {/* Topo no celular (desce abaixo do notch) */}
+      <header className="md:hidden sticky top-0 z-40 bg-pimenta text-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] flex items-center gap-3">
         {brand}
-        <button onClick={() => setMenuOpen(true)} aria-label="Abrir menu" className="bg-transparent border-none text-[#F2EFE4] p-1 cursor-pointer"><Menu size={24} /></button>
       </header>
 
-      {menuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 bg-black/40" onClick={() => setMenuOpen(false)}>
-          <nav className="absolute right-0 top-0 bottom-0 w-[270px] bg-green text-[#F2EFE4] py-5 flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center px-6 pb-4 mb-2 border-b border-white/10">
-              <span className="font-serif font-bold text-lg">Menu</span>
-              <button onClick={() => setMenuOpen(false)} aria-label="Fechar menu" className="bg-transparent border-none text-[#F2EFE4] cursor-pointer"><X size={22} /></button>
-            </div>
-            {nav}
-          </nav>
-        </div>
-      )}
-
       <div className="flex min-h-screen">
-        <aside className="hidden md:flex w-[236px] bg-green text-[#F2EFE4] py-6 shrink-0 flex-col sticky top-0 h-screen">
+        <aside className="foco-claro hidden md:flex w-[236px] bg-pimenta text-white py-6 shrink-0 flex-col sticky top-0 h-screen">
           <div className="px-5 pb-5 border-b border-white/10 mb-3">{brand}</div>
           {nav}
         </aside>
 
-        <main className="flex-1 min-w-0 p-4 md:p-8 md:px-10 max-w-[1180px]">
+        <main className="flex-1 min-w-0 px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-8 md:px-10"><div className="max-w-[1440px] mx-auto">
           {erro && (
-            <div className="mb-4 text-[13px] text-red bg-red-bg px-4 py-3 rounded-lg flex justify-between gap-3 items-center">
-              <span>Não foi possível carregar os dados: {erro}</span>
-              <button onClick={carregar} className="font-semibold bg-transparent border border-red/40 text-red rounded-md px-3 py-1 cursor-pointer">Tentar de novo</button>
+            <div role="alert" className="mb-5 bg-erro-bg rounded-2xl px-4 py-3.5 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                <AlertCircle size={18} className="text-erro shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold text-[14px] text-erro">Não foi possível carregar seus dados.</div>
+                  <div className="text-[13px] text-pimenta-2 mt-0.5">{traduzErro(erro)}</div>
+                </div>
+              </div>
+              <button onClick={tentarDeNovo} disabled={tentando}
+                className="pressionar shrink-0 min-h-[44px] md:min-h-[38px] px-4 rounded-xl bg-erro text-white text-[13.5px] font-semibold border-none cursor-pointer disabled:opacity-60">
+                {tentando ? 'Tentando...' : 'Tentar de novo'}
+              </button>
             </div>
           )}
+          {loading ? <PainelCarregando /> : <>
           {tab === 'resumo' && <ResumoTab caixa={caixaAtivo} contas={contas} estoque={estoque} onNavigate={(t) => go(t as TabId)} />}
           {tab === 'caixa' && (
             <CaixaTab caixa={caixa} setCaixa={setCaixa} formasPagamento={formasPagamento} setFormasPagamento={setFormasPagamento} isDono={isDono} />
@@ -229,8 +264,56 @@ function Dashboard({ isAdmin, isDono, dadosLiberados, email, restaurante, onSign
           {tab === 'contas' && <ContasTab contas={contas} setContas={setContas} caixa={caixa} setCaixa={setCaixa} formasPagamento={formasPagamento} />}
           {tab === 'equipe' && restaurante && <EquipeTab restaurante={restaurante} onRefresh={onRefresh} />}
           {tab === 'admin' && isAdmin && <AdminTab />}
-        </main>
+          </>}
+        </div></main>
       </div>
+
+      {/* Celular: barra de baixo, perto do polegar. As 3 primeiras abas que a pessoa tem + "Mais". */}
+      <nav aria-label="Navegação principal"
+        className="barra-inferior md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-borda pb-[env(safe-area-inset-bottom)]">
+        <div className="grid" style={{ gridTemplateColumns: `repeat(${barra.length + 1}, minmax(0, 1fr))` }}>
+          {barra.map((t) => (
+            <ItemBarra key={t.id} icon={t.icon} label={ROTULO_CURTO[t.id] || t.label} ativo={tab === t.id} onClick={() => go(t.id)} />
+          ))}
+          <ItemBarra icon={MoreHorizontal} label="Mais" ativo={maisAtivo} onClick={() => setMenuOpen(true)} />
+        </div>
+      </nav>
+
+      {menuOpen && (
+        <Modal title="Mais opções" onClose={() => setMenuOpen(false)}>
+          <div className="flex flex-col -mx-2">
+            {resto.map((t) => {
+              const Icon = t.icon;
+              const ativo = tab === t.id;
+              return (
+                <button key={t.id} onClick={() => go(t.id)} aria-current={ativo ? 'page' : undefined}
+                  className={`pressionar flex items-center gap-3 min-h-[52px] px-3 rounded-xl border-none cursor-pointer text-[15px] font-semibold text-left ${ativo ? 'bg-urucum-bg text-urucum' : 'bg-transparent text-pimenta hover:bg-pele'}`}>
+                  <Icon size={19} /> {t.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className={`${resto.length ? 'border-t border-linha mt-3 pt-3' : ''}`}>
+            <div className="text-[12.5px] text-pimenta-3 truncate mb-1" title={email}>Conectado como {email}</div>
+            <button onClick={onSignOut}
+              className="pressionar flex items-center gap-3 w-full min-h-[48px] -mx-2 px-2 rounded-xl text-[15px] font-semibold text-erro bg-transparent border-none cursor-pointer hover:bg-erro-bg">
+              <LogOut size={18} /> Sair
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
+  );
+}
+
+function ItemBarra({ icon: Icon, label, ativo, onClick }: { icon: typeof Package; label: string; ativo: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} aria-current={ativo ? 'page' : undefined}
+      className={`pressionar flex flex-col items-center justify-center gap-1 h-16 bg-transparent border-none cursor-pointer text-[11.5px] font-semibold ${ativo ? 'text-urucum' : 'text-pimenta-3'}`}>
+      <span className={`flex items-center justify-center w-14 h-7 rounded-full transition-colors ${ativo ? 'bg-urucum-bg' : ''}`}>
+        <Icon size={20} strokeWidth={ativo ? 2.25 : 2} />
+      </span>
+      {label}
+    </button>
   );
 }

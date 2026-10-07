@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,13 +7,112 @@
     box-sizing: border-box;
   }
 
+  :root {
+    /* Curvas de movimento: saída rápida e assentamento suave */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    /* Folha que sobe de baixo, no estilo do iOS */
+    --ease-folha: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  html {
+    /* Caprasimo só tem um peso: não deixar o navegador engrossar artificialmente */
+    font-synthesis: none;
+    /* Celular: sem o flash cinza ao tocar e sem a fonte crescer ao virar a tela */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Toque responde na hora (sem a espera do toque duplo) */
+  button, a, summary, label, [role='button'] {
+    touch-action: manipulation;
+  }
+
+  /* Segurar o dedo num botão não seleciona o texto dele */
+  button, summary, [role='button'] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+
   ::selection {
-    background: #C9A227;
-    color: #0E271F;
+    background: #EBA31B;
+    color: #3A2318;
+  }
+
+  :focus-visible {
+    outline: 2px solid #C2410C;
+    outline-offset: 2px;
+  }
+
+  /* Texto de exemplo dentro dos campos, no tom da paleta e legível */
+  input::placeholder, textarea::placeholder {
+    color: #7E6254;
+    opacity: 1;
+  }
+
+  /* Em fundos coloridos (urucum, pimenta) o contorno de foco fica claro */
+  .foco-claro :focus-visible {
+    outline-color: #FFFFFF;
+  }
+
+  /* No açafrão, o contorno de foco fica escuro */
+  .foco-escuro :focus-visible {
+    outline-color: #3A2318;
   }
 }
 
+@layer components {
+  /* Botão que afunda levemente ao ser pressionado (mouse e toque) */
+  .pressionar {
+    transition: transform 160ms var(--ease-out), background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  }
+  .pressionar:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+/* ============ Janela (modal) e folha do celular ============ */
+.modal-fundo { animation: aparecer 200ms ease-out both; }
+.modal-fundo.saindo { animation: sumir 160ms ease-out both; }
+
+/* Celular: a folha sobe de baixo */
+.modal-caixa { animation: folha-sobe 320ms var(--ease-folha) both; }
+.modal-caixa.saindo { animation: folha-desce 160ms ease-out both; }
+
+/* Computador: janela aparece no centro, com leve escala */
+@media (min-width: 768px) {
+  .modal-caixa { animation: janela-entra 200ms var(--ease-out) both; }
+  .modal-caixa.saindo { animation: janela-sai 140ms ease-out both; }
+}
+
+/* ============ Notificação (toast) ============ */
+.toast { animation: toast-entra 240ms var(--ease-out) both; }
+.toast.saindo { animation: toast-sai 180ms ease-out both; }
+
+@keyframes aparecer { from { opacity: 0; } }
+@keyframes sumir { to { opacity: 0; } }
+@keyframes folha-sobe { from { transform: translateY(100%); } }
+@keyframes folha-desce { to { transform: translateY(100%); } }
+@keyframes janela-entra { from { opacity: 0; transform: scale(0.96); } }
+@keyframes janela-sai { to { opacity: 0; transform: scale(0.97); } }
+@keyframes toast-entra { from { opacity: 0; transform: translateY(12px) scale(0.98); } }
+@keyframes toast-sai { to { opacity: 0; transform: translateY(6px); } }
+
+/* Reduzir movimento: nada se desloca; janelas e avisos só aparecem e somem em fade */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+  .modal-fundo, .modal-caixa, .toast { animation: aparecer 150ms ease-out both !important; }
+  .modal-fundo.saindo, .modal-caixa.saindo, .toast.saindo { animation: sumir 120ms ease-out both !important; }
+}
+
 @media print {
-  aside, header { display: none !important; }
+  aside, header, .barra-inferior { display: none !important; }
   main { padding: 0 !important; }
 }

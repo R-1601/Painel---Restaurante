@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Lock, Unlock, Printer, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Lock, Unlock, Printer, CheckCircle2, AlertTriangle, ClipboardList } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { traduzErro } from '../lib/data';
 import { type CaixaItem, type Fechamento, type FormaPagamento, todayISO, addDays, formatBRL, formatDatePt, calcularTotais, valorTaxa } from '../types';
-import { PageHeader, Card, Stat, FieldLabel, inputClass, MoneyInput, parseValor, PrimaryBtn, GhostBtn, Badge, Th, Td, TableWrap, EmptyState, useToast } from './ui';
+import { PageHeader, Card, Stat, FieldLabel, inputClass, MoneyInput, parseValor, PrimaryBtn, GhostBtn, Badge, Th, Td, TableWrap, EmptyState, Esqueleto, ehZero, useToast, useConfirmar } from './ui';
 
 interface Props {
   caixa: CaixaItem[];
@@ -13,6 +13,7 @@ interface Props {
 
 export default function FechamentoTab({ caixa, formasPagamento, isDono }: Props) {
   const toast = useToast();
+  const confirmar = useConfirmar();
   const [data, setData] = useState(todayISO());
   const [fechamentos, setFechamentos] = useState<Fechamento[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -77,7 +78,11 @@ export default function FechamentoTab({ caixa, formasPagamento, isDono }: Props)
   const fechar = async () => {
     if (Number.isNaN(contadoNum)) return toast('Informe quanto tem de dinheiro na gaveta.', 'erro');
     if (diferenca !== null && Math.abs(diferenca) >= 0.01 && !obs.trim()) {
-      if (!window.confirm(`Há uma diferença de ${formatBRL(diferenca)}. Fechar mesmo assim sem observação?`)) return;
+      if (!(await confirmar({
+        titulo: `Fechar com diferença de ${formatBRL(diferenca)}?`,
+        texto: 'Vale anotar o motivo na observação (ex.: troco errado na mesa 3). Se preferir, feche assim mesmo.',
+        acao: 'Fechar mesmo assim', cancelar: 'Voltar e anotar',
+      }))) return;
     }
     setSalvando(true);
     const registro = {
@@ -104,13 +109,14 @@ export default function FechamentoTab({ caixa, formasPagamento, isDono }: Props)
   };
 
   const reabrir = async () => {
-    if (!atual || !window.confirm('Reabrir este caixa? Você poderá corrigir os valores e fechar de novo.')) return;
+    if (!atual) return;
+    if (!(await confirmar({ titulo: 'Reabrir este caixa?', texto: 'Você poderá corrigir os valores e fechar de novo.', acao: 'Reabrir caixa' }))) return;
     const { error } = await supabase.from('fechamentos_caixa').update({ status: 'aberto' }).eq('id', atual.id);
     if (error) return toast(traduzErro(error.message), 'erro');
     carregar();
   };
 
-  const diffTone = diferenca === null ? undefined : Math.abs(diferenca) < 0.01 ? '#2F6F62' : diferenca > 0 ? '#8A6D1E' : '#B33A3A';
+  const diffTone = diferenca === null ? undefined : Math.abs(diferenca) < 0.01 ? '#56743F' : diferenca > 0 ? '#8A5A00' : '#B3261E';
 
   return (
     <div>
@@ -120,38 +126,38 @@ export default function FechamentoTab({ caixa, formasPagamento, isDono }: Props)
       </PageHeader>
 
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-sm text-[#5A5344]">Situação de {formatDatePt(data)}:</span>
-        {carregando ? <Badge>carregando...</Badge> : fechado ? <Badge tone="green"><Lock size={12} /> Fechado</Badge> : atual ? <Badge tone="gold"><Unlock size={12} /> Aberto</Badge> : <Badge>Não aberto</Badge>}
+        <span className="text-sm text-pimenta-2">Situação de {formatDatePt(data)}:</span>
+        {carregando ? <Esqueleto className="h-5 w-20 rounded-full" /> : fechado ? <Badge tone="green"><Lock size={12} /> Fechado</Badge> : atual ? <Badge tone="gold"><Unlock size={12} /> Aberto</Badge> : <Badge>Não aberto</Badge>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        <Stat label="Vendas do dia" value={formatBRL(totais.bruto)} hint={`${totais.vendas} vendas · ticket ${formatBRL(totais.ticketMedio)}`} color="#2F6F62" small />
-        <Stat label="Taxas" value={`− ${formatBRL(totais.taxas)}`} color="#8A6D1E" small />
-        <Stat label="Despesas do dia" value={`− ${formatBRL(totais.despesas)}`} color="#B33A3A" small />
-        <Stat label="Resultado do dia" value={formatBRL(totais.saldo)} color={totais.saldo >= 0 ? '#2F6F62' : '#B33A3A'} small />
+        <Stat label="Vendas do dia" value={formatBRL(totais.bruto)} hint={`${totais.vendas} vendas · ticket ${formatBRL(totais.ticketMedio)}`} color="#56743F" small />
+        <Stat label="Taxas" value={`− ${formatBRL(totais.taxas)}`} color="#8A5A00" small />
+        <Stat label="Despesas do dia" value={`− ${formatBRL(totais.despesas)}`} color="#B3261E" small />
+        <Stat label="Resultado do dia" value={formatBRL(totais.saldo)} color={totais.saldo >= 0 ? '#56743F' : '#B3261E'} small destaque />
       </div>
 
       <div className="grid md:grid-cols-2 gap-5 mb-6 print:block">
         <Card className="p-5">
           <div className="font-semibold text-[15px] mb-3">Vendas por forma de pagamento</div>
-          {porForma.length === 0 ? <p className="text-sm text-[#8A8270] m-0">Nenhuma venda lançada neste dia.</p> : (
+          {porForma.length === 0 ? <p className="text-sm text-pimenta-3 m-0">Nenhuma venda lançada neste dia. As vendas da aba Caixa aparecem aqui, separadas por forma de pagamento.</p> : (
             <div className="flex flex-col gap-2">
               {porForma.map(([id, v]) => (
-                <div key={id} className="flex justify-between text-sm border-b border-paper-line pb-2 last:border-none">
-                  <span>{label(id)} <span className="text-[#8A8270] text-[12px]">({v.qtd})</span></span>
-                  <span className="font-mono">{formatBRL(v.bruto)}{v.taxa > 0 && <span className="text-[#8A8270] text-[12px]"> · líq. {formatBRL(v.bruto - v.taxa)}</span>}</span>
+                <div key={id} className="flex justify-between text-sm border-b border-linha pb-2 last:border-none">
+                  <span>{label(id)} <span className="text-pimenta-3 text-[12px]">({v.qtd})</span></span>
+                  <span className="tabular-nums">{formatBRL(v.bruto)}{v.taxa > 0 && <span className="text-pimenta-3 text-[12px]"> · líq. {formatBRL(v.bruto - v.taxa)}</span>}</span>
                 </div>
               ))}
             </div>
           )}
         </Card>
 
-        <Card className="p-5 font-mono">
+        <Card className="p-5 tabular-nums">
           <div className="font-sans font-semibold text-[15px] mb-3">Conferência do dinheiro na gaveta</div>
           <Linha label="Troco inicial" value={formatBRL(trocoNum)} />
-          <Linha label="+ Vendas em dinheiro" value={formatBRL(entradasDinheiro)} color="#2F6F62" />
-          <Linha label="− Despesas pagas em dinheiro" value={formatBRL(saidasDinheiro)} color="#B33A3A" />
-          <div className="border-t border-dashed border-card-border my-2" />
+          <Linha label="+ Vendas em dinheiro" value={formatBRL(entradasDinheiro)} color="#56743F" />
+          <Linha label="− Despesas pagas em dinheiro" value={formatBRL(saidasDinheiro)} color="#B3261E" />
+          <div className="border-t border-dashed border-borda my-2" />
           <Linha label="= Deveria ter na gaveta" value={formatBRL(esperado)} bold />
           {!Number.isNaN(contadoNum) && (
             <>
@@ -178,7 +184,7 @@ export default function FechamentoTab({ caixa, formasPagamento, isDono }: Props)
             </div>
             <div>
               <FieldLabel>Observação</FieldLabel>
-              <input className={inputClass} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex: troco errado mesa 3" />
+              <input className={inputClass} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex: troco errado mesa 3" enterKeyHint="done" />
             </div>
           </div>
           <div className="flex flex-col md:flex-row gap-2 mt-5">
@@ -190,38 +196,65 @@ export default function FechamentoTab({ caixa, formasPagamento, isDono }: Props)
 
       {fechado && atual && (
         <Card className="p-5 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="text-sm text-[#5A5344]">
+          <div className="text-sm text-pimenta-2">
             Fechado em {new Date(atual.fechado_em || '').toLocaleString('pt-BR')}
             {atual.observacao && <> · <i>{atual.observacao}</i></>}
           </div>
           {isDono
             ? <div className="print:hidden"><GhostBtn onClick={reabrir}><Unlock size={15} /> Reabrir</GhostBtn></div>
-            : <div className="text-[12.5px] text-[#8A8270]">Só o dono pode reabrir um caixa fechado.</div>}
+            : <div className="text-[12.5px] text-pimenta-3">Só o dono pode reabrir um caixa fechado.</div>}
         </Card>
       )}
 
       <div className="print:hidden">
-        <h3 className="font-serif text-[18px] font-bold text-green-dark mb-3">Últimos fechamentos</h3>
+        <h3 className="font-display text-[18px] font-bold text-pimenta mb-3">Últimos fechamentos</h3>
         <TableWrap>
-          {fechamentos.length === 0 ? <EmptyState text="Nenhum fechamento registrado ainda." /> : (
-            <table className="w-full border-collapse">
+          {carregando ? (
+            <div role="status" aria-label="Carregando fechamentos" className="p-4 flex flex-col gap-3">
+              {[0, 1, 2].map((k) => <Esqueleto key={k} className="h-8" />)}
+            </div>
+          ) : fechamentos.length === 0 ? (
+            <EmptyState icon={ClipboardList} title="Nenhum fechamento ainda"
+              text="No fim do dia, informe o dinheiro contado na gaveta e toque em Fechar caixa do dia. O histórico fica aqui." />
+          ) : (<>
+            {/* Celular: uma linha por dia, com o que importa (diferença) */}
+            <div className="md:hidden divide-y divide-linha">
+              {fechamentos.map((f) => (
+                <button key={f.id} type="button" onClick={() => { setData(f.data); window.scrollTo(0, 0); }}
+                  className="w-full flex items-center justify-between gap-3 px-4 min-h-[60px] py-2.5 bg-transparent border-none text-left font-sans text-pimenta cursor-pointer active:bg-pele/60">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[14px] font-semibold tabular-nums">
+                      {formatDatePt(f.data)} {f.status === 'fechado' ? <Badge tone="green">Fechado</Badge> : <Badge tone="gold">Aberto</Badge>}
+                    </div>
+                    <div className="text-[12.5px] text-pimenta-3 tabular-nums mt-0.5">Vendas {f.total_vendas != null ? formatBRL(f.total_vendas) : '–'}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-[11.5px] text-pimenta-3">Diferença</div>
+                    <div className="tabular-nums font-semibold text-[14px]" style={{ color: f.diferenca == null || f.status !== 'fechado' ? '#7E6254' : Math.abs(f.diferenca) < 0.01 ? '#56743F' : f.diferenca > 0 ? '#8A5A00' : '#B3261E' }}>
+                      {f.diferenca != null && f.status === 'fechado' ? formatBRL(f.diferenca) : '–'}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <table className="hidden md:table w-full border-collapse">
               <thead><tr><Th>Data</Th><Th>Situação</Th><Th right>Vendas</Th><Th right>Esperado</Th><Th right>Contado</Th><Th right>Diferença</Th></tr></thead>
               <tbody>
                 {fechamentos.map((f) => (
-                  <tr key={f.id} className="cursor-pointer hover:bg-[#FCFAF4]" onClick={() => { setData(f.data); window.scrollTo(0, 0); }}>
-                    <Td className="font-mono whitespace-nowrap">{formatDatePt(f.data)}</Td>
+                  <tr key={f.id} className="cursor-pointer hover:bg-pele/50" onClick={() => { setData(f.data); window.scrollTo(0, 0); }}>
+                    <Td className="tabular-nums whitespace-nowrap">{formatDatePt(f.data)}</Td>
                     <Td>{f.status === 'fechado' ? <Badge tone="green">Fechado</Badge> : <Badge tone="gold">Aberto</Badge>}</Td>
-                    <Td className="font-mono text-right">{f.total_vendas != null ? formatBRL(f.total_vendas) : '—'}</Td>
-                    <Td className="font-mono text-right">{f.dinheiro_esperado != null ? formatBRL(f.dinheiro_esperado) : '—'}</Td>
-                    <Td className="font-mono text-right">{f.dinheiro_contado != null ? formatBRL(f.dinheiro_contado) : '—'}</Td>
-                    <Td className="font-mono text-right font-semibold" style={{ color: f.diferenca == null ? undefined : Math.abs(f.diferenca) < 0.01 ? '#2F6F62' : f.diferenca > 0 ? '#8A6D1E' : '#B33A3A' }}>
+                    <Td className="tabular-nums text-right">{f.total_vendas != null ? formatBRL(f.total_vendas) : '—'}</Td>
+                    <Td className="tabular-nums text-right">{f.dinheiro_esperado != null ? formatBRL(f.dinheiro_esperado) : '—'}</Td>
+                    <Td className="tabular-nums text-right">{f.dinheiro_contado != null ? formatBRL(f.dinheiro_contado) : '—'}</Td>
+                    <Td className="tabular-nums text-right font-semibold" style={{ color: f.diferenca == null ? undefined : Math.abs(f.diferenca) < 0.01 ? '#56743F' : f.diferenca > 0 ? '#8A5A00' : '#B3261E' }}>
                       {f.diferenca != null && f.status === 'fechado' ? formatBRL(f.diferenca) : '—'}
                     </Td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
+          </>)}
         </TableWrap>
       </div>
     </div>
@@ -231,8 +264,8 @@ export default function FechamentoTab({ caixa, formasPagamento, isDono }: Props)
 function Linha({ label, value, bold, color }: { label: string; value: string; bold?: boolean; color?: string }) {
   return (
     <div className={`flex justify-between text-[13.5px] py-1 ${bold ? 'font-bold' : ''}`}>
-      <span className="text-[#5A5344] font-sans">{label}</span>
-      <span style={{ color: color || '#20291F' }}>{value}</span>
+      <span className="text-pimenta-2 font-sans">{label}</span>
+      <span style={{ color: ehZero(value) ? '#7E6254' : color || '#3A2318' }}>{value}</span>
     </div>
   );
 }

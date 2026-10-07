@@ -83,9 +83,9 @@ export default function AdminTab() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <Stat label="Restaurantes ativos" value={String(ativosPagantes)} small />
-        <Stat label="Receita mensal estimada" value={(ativosPagantes * precoMensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} hint={`${ativosPagantes} × R$ ${precoMensal}`} color="#2F6F62" small />
-        <Stat label="Aguardando ativação" value={String(pendentes)} color={pendentes ? '#8A6D1E' : undefined} small />
-        <Stat label="Vencidos / vencendo" value={String(vencendo)} color={vencendo ? '#B33A3A' : undefined} small />
+        <Stat label="Receita mensal estimada" value={(ativosPagantes * precoMensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} hint={`${ativosPagantes} × R$ ${precoMensal}`} color="#56743F" small />
+        <Stat label="Aguardando ativação" value={String(pendentes)} color={pendentes ? '#8A5A00' : undefined} small />
+        <Stat label="Vencidos / vencendo" value={String(vencendo)} color={vencendo ? '#B3261E' : undefined} small />
       </div>
 
       <div className="flex flex-col md:flex-row gap-3 mb-3 md:items-center">
@@ -94,13 +94,13 @@ export default function AdminTab() {
           { id: 'ativo', label: 'Em dia' }, { id: 'bloqueado', label: 'Bloqueados' },
         ]} />
         <div className="relative md:w-[280px]">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A8270]" />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-pimenta-3" />
           <input className={`${inputClass} pl-9`} placeholder="Buscar restaurante ou e-mail" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
       </div>
 
       <TableWrap>
-        {lista.length === 0 ? <EmptyState text={loading ? 'Carregando...' : 'Nenhum restaurante aqui.'} /> : (
+        {lista.length === 0 ? <EmptyState title={loading ? 'Carregando...' : 'Nenhum restaurante aqui.'} /> : (
           <table className="w-full border-collapse min-w-[760px]">
             <thead><tr><Th>Restaurante</Th><Th>Dono</Th><Th>Usuários</Th><Th>Situação</Th><Th>Pago até</Th><Th></Th></tr></thead>
             <tbody>
@@ -111,27 +111,27 @@ export default function AdminTab() {
                   <tr key={r.id}>
                     <Td>
                       <div className="font-semibold">{r.nome}</div>
-                      <div className="text-[12px] text-[#8A8270]">desde {formatDatePt(r.created_at)}</div>
+                      <div className="text-[12px] text-pimenta-3">desde {formatDatePt(r.created_at)}</div>
                     </Td>
-                    <Td><div>{d?.nome || '—'}</div><div className="text-[12px] text-[#8A8270]">{d?.email}</div></Td>
-                    <Td className="text-center font-mono">{qtdUsuarios(r.id)}</Td>
+                    <Td><div>{d?.nome || '—'}</div><div className="text-[12px] text-pimenta-3">{d?.email}</div></Td>
+                    <Td className="text-center tabular-nums">{qtdUsuarios(r.id)}</Td>
                     <Td><Badge tone={s.tone}>{s.label}</Badge></Td>
                     <Td>
-                      <input type="date" className="px-2 py-1 rounded-md border border-card-border text-[13px] bg-[#FCFAF4]" value={r.pago_ate || ''}
+                      <input type="date" className="px-2 py-1 rounded-md border border-borda text-[16px] md:text-[13px] bg-white" value={r.pago_ate || ''}
                         onChange={(e) => atualizar(r, r.status, e.target.value || null, 'Vencimento atualizado.')} />
                     </Td>
                     <Td>
                       <div className="flex gap-1.5 justify-end flex-wrap">
                         <button disabled={busy === r.id} onClick={() => renovar(r)}
-                          className="bg-green text-[#F2EFE4] border-none px-2.5 py-1.5 rounded-md text-[12.5px] font-semibold cursor-pointer hover:bg-green-dark disabled:opacity-60 whitespace-nowrap">
+                          className="bg-urucum text-white border-none px-2.5 py-1.5 rounded-md text-[12.5px] font-semibold cursor-pointer hover:bg-urucum-dark disabled:opacity-60 whitespace-nowrap">
                           {r.status === 'pendente' ? 'Ativar 1 mês' : '+1 mês'}
                         </button>
                         {r.status !== 'bloqueado' ? (
                           <button disabled={busy === r.id} onClick={() => window.confirm(`Bloquear ${r.nome}? Ninguém do restaurante consegue acessar até você liberar.`) && atualizar(r, 'bloqueado', r.pago_ate, `${r.nome} bloqueado.`)}
-                            className="bg-white text-red border border-red/40 px-2.5 py-1.5 rounded-md text-[12.5px] font-semibold cursor-pointer hover:bg-red-bg disabled:opacity-60">Bloquear</button>
+                            className="bg-white text-erro border border-erro/40 px-2.5 py-1.5 rounded-md text-[12.5px] font-semibold cursor-pointer hover:bg-erro-bg disabled:opacity-60">Bloquear</button>
                         ) : (
                           <button disabled={busy === r.id} onClick={() => atualizar(r, 'ativo', r.pago_ate, `${r.nome} desbloqueado.`)}
-                            className="bg-white text-teal border border-teal/40 px-2.5 py-1.5 rounded-md text-[12.5px] font-semibold cursor-pointer hover:bg-teal-bg disabled:opacity-60">Desbloquear</button>
+                            className="bg-white text-louro border border-louro/40 px-2.5 py-1.5 rounded-md text-[12.5px] font-semibold cursor-pointer hover:bg-louro-bg disabled:opacity-60">Desbloquear</button>
                         )}
                       </div>
                     </Td>
@@ -142,7 +142,7 @@ export default function AdminTab() {
           </table>
         )}
       </TableWrap>
-      <p className="text-[12.5px] text-[#8A8270] mt-3">Quando a data de “Pago até” passa, o acesso do restaurante é bloqueado automaticamente, e os dados continuam guardados. Deixe a data em branco para um acesso sem vencimento.</p>
+      <p className="text-[12.5px] text-pimenta-3 mt-3">Quando a data de “Pago até” passa, o acesso do restaurante é bloqueado automaticamente, e os dados continuam guardados. Deixe a data em branco para um acesso sem vencimento.</p>
     </div>
   );
 }

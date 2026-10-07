@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Download, TrendingUp, TrendingDown } from 'lucide-react';
+import { Download, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
 import {
   type CaixaItem, type FormaPagamento, CANAIS_VENDA, CATEGORIAS_DESPESA, labelOf, todayISO, addDays, formatBRL, formatDatePt,
   monthKeyOffset, monthRange, calcularTotais, inRange, daysBetween, pctVariacao, valorTaxa, formatMonthPt, parseISODate,
@@ -120,7 +120,7 @@ export default function RelatoriosTab({ caixa, formasPagamento }: Props) {
         {periodo === 'custom' && (
           <div className="flex items-center gap-2">
             <input type="date" className={`${inputClass} md:w-[150px]`} value={de} onChange={(e) => setDe(e.target.value)} />
-            <span className="text-sm text-[#8A8270]">até</span>
+            <span className="text-sm text-pimenta-3">até</span>
             <input type="date" className={`${inputClass} md:w-[150px]`} value={ate} onChange={(e) => setAte(e.target.value)} />
           </div>
         )}
@@ -129,60 +129,87 @@ export default function RelatoriosTab({ caixa, formasPagamento }: Props) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <Stat label="Vendas (bruto)" value={formatBRL(t.bruto)} hint={<Var atual={t.bruto} anterior={tAnt.bruto} />} />
         <Stat label="Despesas" value={formatBRL(t.despesas)} hint={<Var atual={t.despesas} anterior={tAnt.despesas} inverso />} />
-        <Stat label="Lucro (após taxas)" value={formatBRL(t.saldo)} color={t.saldo >= 0 ? '#2F6F62' : '#B33A3A'} hint={<Var atual={t.saldo} anterior={tAnt.saldo} />} />
+        <Stat label="Lucro (após taxas)" value={formatBRL(t.saldo)} color={t.saldo >= 0 ? '#56743F' : '#B3261E'} hint={<Var atual={t.saldo} anterior={tAnt.saldo} />} destaque />
         <Stat label="Ticket médio" value={formatBRL(t.ticketMedio)} hint={<>{t.vendas} vendas · <Var atual={t.ticketMedio} anterior={tAnt.ticketMedio} /></>} />
       </div>
 
       {itens.length === 0 ? (
-        <TableWrap><EmptyState text="Sem lançamentos neste período." /></TableWrap>
+        <TableWrap>
+          <EmptyState icon={BarChart3} title="Sem lançamentos neste período" text="Escolha outro período acima ou lance vendas na aba Caixa. Os gráficos aparecem assim que houver movimento." />
+        </TableWrap>
       ) : (
         <>
           <Card className="p-5 mb-5">
             <div className="flex flex-wrap justify-between gap-2 mb-1">
               <div className="font-semibold text-[15px]">Vendas por dia</div>
-              {melhorDia && <div className="text-[12.5px] text-[#8A8270]">Melhor dia: <b className="text-ink">{formatDatePt(melhorDia.data)}</b> · {formatBRL(melhorDia.vendas)}</div>}
+              {melhorDia && <div className="text-[12.5px] text-pimenta-3">Melhor dia: <b className="text-pimenta">{formatDatePt(melhorDia.data)}</b> · {formatBRL(melhorDia.vendas)}</div>}
             </div>
-            <div className="text-[12.5px] text-[#8A8270] mb-3">Média de {formatBRL(t.bruto / Math.max(1, dias))} por dia</div>
+            <div className="text-[12.5px] text-pimenta-3 mb-3">Média de {formatBRL(t.bruto / Math.max(1, dias))} por dia</div>
             <BarrasDia dados={porDia} />
           </Card>
 
           <div className="grid md:grid-cols-2 gap-5 mb-5">
             <Ranking titulo="Vendas por canal" itens={porCanal} total={t.bruto} />
             <Ranking titulo="Vendas por forma de pagamento" itens={porForma} total={t.bruto} />
-            <Ranking titulo="Despesas por categoria" itens={porCategoria} total={t.despesas} cor="#B33A3A" vazio="Nenhuma despesa no período." />
+            <Ranking titulo="Despesas por categoria" itens={porCategoria} total={t.despesas} cor="#B3261E" vazio="Nenhuma despesa no período." />
             <Ranking titulo="Média de vendas por dia da semana" itens={diasSemana} total={Math.max(...diasSemana.map((d) => d[1]))} semPct />
           </div>
 
           {taxasPorForma.length > 0 && (
             <Card className="p-5 mb-5">
               <div className="font-semibold text-[15px] mb-1">Quanto você pagou de taxas</div>
-              <div className="text-[13px] text-[#8A8270] mb-3">Total de {formatBRL(t.taxas)} ({t.bruto ? ((t.taxas / t.bruto) * 100).toFixed(1).replace('.', ',') : 0}% do faturamento)</div>
+              <div className="text-[13px] text-pimenta-3 mb-3">Total de {formatBRL(t.taxas)} ({t.bruto ? ((t.taxas / t.bruto) * 100).toFixed(1).replace('.', ',') : 0}% do faturamento)</div>
               <div className="flex flex-wrap gap-x-6 gap-y-1.5">
-                {taxasPorForma.map(([k, v]) => <div key={k} className="text-sm"><span className="text-[#5A5344]">{k}:</span> <span className="font-mono font-semibold">{formatBRL(v)}</span></div>)}
+                {taxasPorForma.map(([k, v]) => <div key={k} className="text-sm"><span className="text-pimenta-2">{k}:</span> <span className="tabular-nums font-semibold">{formatBRL(v)}</span></div>)}
               </div>
             </Card>
           )}
         </>
       )}
 
-      <h3 className="font-serif text-[18px] font-bold text-green-dark mb-3">Últimos 6 meses</h3>
-      <TableWrap>
+      <h3 className="font-display text-[18px] font-bold text-pimenta mb-3">Últimos 6 meses</h3>
+      {/* Celular: um cartão por mês com vendas e lucro */}
+      <div className="md:hidden bg-white rounded-2xl divide-y divide-linha">
+        {meses.map((m) => (
+          <div key={m.key} className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="min-w-0">
+              <div className={`text-[14px] font-semibold ${m.bruto === 0 && m.despesas === 0 ? 'text-pimenta-3' : 'text-pimenta'}`}>{formatMonthPt(m.key)}</div>
+              {(m.bruto > 0 || m.despesas > 0) && <div className="text-[12.5px] text-pimenta-3 tabular-nums mt-0.5">Vendas {formatBRL(m.bruto)} · ticket {formatBRL(m.ticketMedio)}</div>}
+            </div>
+            {m.bruto === 0 && m.despesas === 0
+              ? <span className="text-[13px] text-pimenta-3">Sem movimento</span>
+              : (
+                <div className="text-right shrink-0">
+                  <div className="text-[11.5px] text-pimenta-3">Lucro</div>
+                  <div className="tabular-nums font-semibold text-[14px]" style={{ color: m.saldo >= 0 ? '#56743F' : '#B3261E' }}>{formatBRL(m.saldo)}</div>
+                </div>
+              )}
+          </div>
+        ))}
+      </div>
+      <div className="hidden md:block"><TableWrap>
         <table className="w-full border-collapse">
           <thead><tr><Th>Mês</Th><Th right>Vendas</Th><Th right>Taxas</Th><Th right>Despesas</Th><Th right>Lucro</Th><Th right>Ticket médio</Th></tr></thead>
           <tbody>
-            {meses.map((m) => (
+            {meses.map((m) => (m.bruto === 0 && m.despesas === 0 ? (
+              // Mês sem nenhum lançamento: uma linha discreta em vez de seis zeros
               <tr key={m.key}>
-                <Td className="whitespace-nowrap font-semibold">{formatMonthPt(m.key)}</Td>
-                <Td className="font-mono text-right">{formatBRL(m.bruto)}</Td>
-                <Td className="font-mono text-right text-[#8A8270]">{formatBRL(m.taxas)}</Td>
-                <Td className="font-mono text-right">{formatBRL(m.despesas)}</Td>
-                <Td className="font-mono text-right font-semibold" style={{ color: m.saldo >= 0 ? '#2F6F62' : '#B33A3A' }}>{formatBRL(m.saldo)}</Td>
-                <Td className="font-mono text-right">{formatBRL(m.ticketMedio)}</Td>
+                <Td className="whitespace-nowrap font-semibold text-pimenta-3">{formatMonthPt(m.key)}</Td>
+                <Td colSpan={5} className="text-right text-pimenta-3 text-[13px]">Sem movimento</Td>
               </tr>
-            ))}
+            ) : (
+              <tr key={m.key} className="hover:bg-pele/50">
+                <Td className="whitespace-nowrap font-semibold">{formatMonthPt(m.key)}</Td>
+                <Td className="tabular-nums text-right">{formatBRL(m.bruto)}</Td>
+                <Td className="tabular-nums text-right text-pimenta-3">{formatBRL(m.taxas)}</Td>
+                <Td className="tabular-nums text-right">{formatBRL(m.despesas)}</Td>
+                <Td className="tabular-nums text-right font-semibold" style={{ color: m.saldo >= 0 ? '#56743F' : '#B3261E' }}>{formatBRL(m.saldo)}</Td>
+                <Td className="tabular-nums text-right">{formatBRL(m.ticketMedio)}</Td>
+              </tr>
+            )))}
           </tbody>
         </table>
-      </TableWrap>
+      </TableWrap></div>
     </div>
   );
 }
@@ -195,27 +222,27 @@ function Var({ atual, anterior, inverso }: { atual: number; anterior: number; in
   const bom = inverso ? p <= 0 : p >= 0;
   const Icon = p >= 0 ? TrendingUp : TrendingDown;
   return (
-    <span className="inline-flex items-center gap-1 font-semibold" style={{ color: bom ? '#2F6F62' : '#B33A3A' }}>
-      <Icon size={13} /> {p >= 0 ? '+' : ''}{p.toFixed(0)}% <span className="font-normal text-[#8A8270]">vs. anterior</span>
+    <span className="inline-flex items-center gap-1 font-semibold" style={{ color: bom ? '#56743F' : '#B3261E' }}>
+      <Icon size={13} /> {p >= 0 ? '+' : ''}{p.toFixed(0)}% <span className="font-normal text-pimenta-3">vs. anterior</span>
     </span>
   );
 }
 
-function Ranking({ titulo, itens, total, cor = '#2F6F62', vazio = 'Sem dados.', semPct }: {
+function Ranking({ titulo, itens, total, cor = '#56743F', vazio = 'Sem dados.', semPct }: {
   titulo: string; itens: [string, number][]; total: number; cor?: string; vazio?: string; semPct?: boolean;
 }) {
   return (
     <Card className="p-5">
       <div className="font-semibold text-[15px] mb-3.5">{titulo}</div>
-      {itens.length === 0 ? <p className="text-sm text-[#8A8270] m-0">{vazio}</p> : itens.map(([k, v]) => {
+      {itens.length === 0 ? <p className="text-sm text-pimenta-3 m-0">{vazio}</p> : itens.map(([k, v]) => {
         const pct = total > 0 ? (v / total) * 100 : 0;
         return (
           <div key={k} className="mb-3 last:mb-0">
             <div className="flex justify-between text-[13.5px] mb-1 gap-2">
-              <span className="text-[#5A5344]">{k}</span>
-              <span className="font-mono whitespace-nowrap">{formatBRL(v)}{!semPct && <span className="text-[#8A8270]"> · {pct.toFixed(0)}%</span>}</span>
+              <span className="text-pimenta-2">{k}</span>
+              <span className="tabular-nums whitespace-nowrap">{formatBRL(v)}{!semPct && <span className="text-pimenta-3"> · {pct.toFixed(0)}%</span>}</span>
             </div>
-            <div className="bg-paper-line h-2 rounded-full overflow-hidden">
+            <div className="bg-linha h-2 rounded-full overflow-hidden">
               <div className="h-2 rounded-full" style={{ width: `${Math.max(pct, v > 0 ? 1.5 : 0)}%`, background: cor }} />
             </div>
           </div>
@@ -236,22 +263,22 @@ function BarrasDia({ dados }: { dados: { data: string; vendas: number; despesas:
   return (
     <div className="relative">
       <div className="flex">
-        <div className="flex flex-col justify-between text-[10.5px] text-[#8A8270] font-mono pr-2 text-right shrink-0 w-[42px]" style={{ height: H }}>
+        <div className="flex flex-col justify-between text-[10.5px] text-pimenta-3 tabular-nums pr-2 text-right shrink-0 w-[42px]" style={{ height: H }}>
           {[...passos].reverse().map((v, i) => <span key={i}>{abreviar(v)}</span>)}
         </div>
         <div className="flex-1 min-w-0 relative" style={{ height: H }}>
-          {passos.map((_, i) => <div key={i} className="absolute left-0 right-0 border-t border-paper-line" style={{ top: `${(i / 2) * 100}%` }} />)}
+          {passos.map((_, i) => <div key={i} className="absolute left-0 right-0 border-t border-linha" style={{ top: `${(i / 2) * 100}%` }} />)}
           <div className="absolute inset-0 flex items-end" style={{ gap: n > 40 ? 1 : 2 }}>
             {dados.map((d, i) => (
               <div key={d.data} className="flex-1 h-full flex items-end justify-center cursor-default"
                 onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onClick={() => setHover(i)}>
                 <div className="w-full max-w-[44px] rounded-t-[4px] transition-opacity"
-                  style={{ height: `${(d.vendas / max) * 100}%`, minHeight: d.vendas > 0 ? 2 : 0, background: '#2F6F62', opacity: hover === null || hover === i ? 1 : 0.45 }} />
+                  style={{ height: `${(d.vendas / max) * 100}%`, minHeight: d.vendas > 0 ? 2 : 0, background: '#56743F', opacity: hover === null || hover === i ? 1 : 0.45 }} />
               </div>
             ))}
           </div>
           {hover !== null && (
-            <div className="absolute z-10 -top-2 bg-ink text-white text-[12px] px-2.5 py-1.5 rounded-md shadow-lg pointer-events-none whitespace-nowrap"
+            <div className="absolute z-10 -top-2 bg-pimenta text-white text-[12px] px-2.5 py-1.5 rounded-md shadow-lg pointer-events-none whitespace-nowrap"
               style={{ left: `${((hover + 0.5) / n) * 100}%`, transform: `translateX(${hover > n * 0.7 ? '-100%' : hover < n * 0.3 ? '0' : '-50%'})` }}>
               <div className="font-semibold">{formatDatePt(dados[hover].data)} · {['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][parseISODate(dados[hover].data).getDay()]}</div>
               <div>Vendas: {formatBRL(dados[hover].vendas)}</div>
@@ -260,7 +287,7 @@ function BarrasDia({ dados }: { dados: { data: string; vendas: number; despesas:
           )}
         </div>
       </div>
-      <div className="flex ml-[42px] mt-1.5 text-[10.5px] text-[#8A8270] font-mono" style={{ gap: n > 40 ? 1 : 2 }}>
+      <div className="flex ml-[42px] mt-1.5 text-[10.5px] text-pimenta-3 tabular-nums" style={{ gap: n > 40 ? 1 : 2 }}>
         {dados.map((d, i) => <div key={d.data} className="flex-1 text-center overflow-visible whitespace-nowrap">{mostrarRotulo(i) ? d.data.slice(8) + '/' + d.data.slice(5, 7) : ''}</div>)}
       </div>
     </div>

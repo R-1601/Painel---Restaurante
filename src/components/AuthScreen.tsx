@@ -74,29 +74,29 @@ export default function AuthScreen({ inicial = 'login', onVoltar }: { inicial?: 
     <button
       type="button"
       onClick={() => trocar(m)}
-      className={`flex-1 py-2 rounded-md text-[13px] font-semibold border-none cursor-pointer transition-colors ${mode === m ? 'bg-white text-green-dark shadow-sm' : 'bg-transparent text-[#6B6355]'}`}
+      className={`flex-1 py-2 rounded-md text-[13px] font-semibold border-none cursor-pointer transition-colors ${mode === m ? 'bg-white text-pimenta shadow-sm' : 'bg-transparent text-pimenta-3'}`}
     >
       {label}
     </button>
   );
 
   return (
-    <div className="min-h-screen bg-paper flex items-center justify-center font-sans text-ink px-4 py-10">
+    <div className="min-h-screen bg-pele flex items-center justify-center font-sans text-pimenta px-4 py-10">
       <div className="w-full max-w-[420px]">
         {onVoltar && (
-          <button onClick={onVoltar} className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#6B6355] hover:text-green-dark bg-transparent border-none cursor-pointer p-0">
+          <button onClick={onVoltar} className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-pimenta-3 hover:text-pimenta bg-transparent border-none cursor-pointer p-0">
             <ArrowLeft size={15} /> Voltar
           </button>
         )}
         <div className="text-center mb-7">
-          <div className="w-14 h-14 rounded-2xl bg-green text-[#F2EFE4] flex items-center justify-center mx-auto mb-3"><Store size={26} /></div>
-          <div className="font-serif text-[28px] font-bold text-green-dark leading-tight">Painel do Restaurante</div>
-          <p className="text-[13.5px] text-[#6B6355] mt-1">Caixa, fechamento, estoque e contas num só lugar</p>
+          <div className="w-14 h-14 rounded-2xl bg-urucum text-white flex items-center justify-center mx-auto mb-3"><Store size={26} /></div>
+          <div className="font-display text-[28px] font-bold text-pimenta leading-tight">Painel do Restaurante</div>
+          <p className="text-[13.5px] text-pimenta-3 mt-1">Caixa, fechamento, estoque e contas num só lugar</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-card-border p-5 md:p-6 shadow-sm">
+        <div className="bg-white rounded-xl border border-borda p-5 md:p-6 shadow-sm">
           {mode !== 'esqueci' && (
-            <div className="flex gap-1 mb-5 bg-paper rounded-lg p-1">
+            <div className="flex gap-1 mb-5 bg-pele rounded-lg p-1">
               {tabBtn('login', 'Entrar')}
               {tabBtn('dono', 'Testar grátis')}
               {tabBtn('convite', 'Tenho convite')}
@@ -104,8 +104,8 @@ export default function AuthScreen({ inicial = 'login', onVoltar }: { inicial?: 
           )}
           {mode === 'esqueci' && (
             <div className="mb-4">
-              <div className="font-serif text-[19px] font-bold text-green-dark flex items-center gap-2"><Mail size={18} /> Recuperar senha</div>
-              <p className="text-[13px] text-[#6B6355] mt-1 mb-0">Enviaremos um link para você criar uma nova senha.</p>
+              <div className="font-display text-[19px] font-bold text-pimenta flex items-center gap-2"><Mail size={18} /> Recuperar senha</div>
+              <p className="text-[13px] text-pimenta-3 mt-1 mb-0">Enviaremos um link para você criar uma nova senha.</p>
             </div>
           )}
 
@@ -123,12 +123,12 @@ export default function AuthScreen({ inicial = 'login', onVoltar }: { inicial?: 
             {mode === 'convite' && (
               <Field label="Código de convite">
                 <div className="relative">
-                  <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A8270]" />
-                  <input className={`${inputClass} pl-9 font-mono tracking-[0.3em] uppercase`} maxLength={6} value={codigo} onChange={(e) => checarCodigo(e.target.value)} placeholder="ABC123" />
+                  <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-pimenta-3" />
+                  <input className={`${inputClass} pl-9 tabular-nums tracking-[0.3em] uppercase`} maxLength={6} value={codigo} onChange={(e) => checarCodigo(e.target.value)} placeholder="ABC123" />
                 </div>
-                {codigoNome && <div className="text-[12.5px] text-teal mt-1.5 font-semibold">✓ {codigoNome}</div>}
-                {codigoNome === '' && <div className="text-[12.5px] text-red mt-1.5">Código não encontrado.</div>}
-                {codigoNome === null && <div className="text-[12px] text-[#8A8270] mt-1.5">Peça o código ao dono do restaurante.</div>}
+                {codigoNome && <div className="text-[12.5px] text-louro mt-1.5 font-semibold">✓ {codigoNome}</div>}
+                {codigoNome === '' && <div className="text-[12.5px] text-erro mt-1.5">Código não encontrado.</div>}
+                {codigoNome === null && <div className="text-[12px] text-pimenta-3 mt-1.5">Peça o código ao dono do restaurante.</div>}
               </Field>
             )}
             <Field label="E-mail">
@@ -141,13 +141,13 @@ export default function AuthScreen({ inicial = 'login', onVoltar }: { inicial?: 
               </Field>
             )}
 
-            {error && <div className="text-[12.5px] text-red bg-red-bg px-3 py-2 rounded-md">{error}</div>}
-            {info && <div className="text-[12.5px] text-teal bg-teal-bg px-3 py-2 rounded-md">{info}</div>}
+            {error && <div className="text-[12.5px] text-erro bg-erro-bg px-3 py-2 rounded-md">{error}</div>}
+            {info && <div className="text-[12.5px] text-louro bg-louro-bg px-3 py-2 rounded-md">{info}</div>}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green text-[#F2EFE4] border-none px-4 py-3 rounded-lg text-sm font-semibold cursor-pointer hover:bg-green-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full bg-urucum text-white border-none px-4 py-3 rounded-lg text-sm font-semibold cursor-pointer hover:bg-urucum-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : mode === 'esqueci' ? 'Enviar link' : mode === 'dono' ? 'Criar conta do restaurante' : 'Entrar na equipe'}
             </button>
@@ -155,18 +155,18 @@ export default function AuthScreen({ inicial = 'login', onVoltar }: { inicial?: 
 
           <div className="mt-4 text-center text-[12.5px]">
             {mode === 'login' && (
-              <button onClick={() => trocar('esqueci')} className="bg-transparent border-none text-[#6B6355] hover:text-green-dark cursor-pointer underline">Esqueci minha senha</button>
+              <button onClick={() => trocar('esqueci')} className="bg-transparent border-none text-pimenta-3 hover:text-pimenta cursor-pointer underline">Esqueci minha senha</button>
             )}
             {mode === 'esqueci' && (
-              <button onClick={() => trocar('login')} className="bg-transparent border-none text-[#6B6355] hover:text-green-dark cursor-pointer underline">Voltar para o login</button>
+              <button onClick={() => trocar('login')} className="bg-transparent border-none text-pimenta-3 hover:text-pimenta cursor-pointer underline">Voltar para o login</button>
             )}
             {mode === 'dono' && (
-              <p className="text-[11.5px] text-[#8A8270] m-0 leading-relaxed">
+              <p className="text-[11.5px] text-pimenta-3 m-0 leading-relaxed">
                 Seu teste grátis de 15 dias começa na hora. Sem cartão de crédito.
               </p>
             )}
             {mode === 'convite' && (
-              <p className="text-[11.5px] text-[#8A8270] m-0 leading-relaxed">
+              <p className="text-[11.5px] text-pimenta-3 m-0 leading-relaxed">
                 O dono do restaurante precisa aprovar seu acesso depois do cadastro.
               </p>
             )}
@@ -180,7 +180,7 @@ export default function AuthScreen({ inicial = 'login', onVoltar }: { inicial?: 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[12.5px] font-semibold text-[#5A5344] mb-1.5">{label}</label>
+      <label className="block text-[12.5px] font-semibold text-pimenta-2 mb-1.5">{label}</label>
       {children}
     </div>
   );

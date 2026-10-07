@@ -4,10 +4,11 @@ import { supabase } from '../lib/supabase';
 import { traduzErro } from '../lib/data';
 import type { Profile } from '../lib/auth';
 import { type Restaurante, formatDatePt } from '../types';
-import { PageHeader, Card, Badge, EmptyState, inputClass, PrimaryBtn, GhostBtn, useToast } from './ui';
+import { PageHeader, Card, Badge, EmptyState, inputClass, PrimaryBtn, GhostBtn, useToast, useConfirmar } from './ui';
 
 export default function EquipeTab({ restaurante, onRefresh }: { restaurante: Restaurante; onRefresh: () => Promise<void> }) {
   const toast = useToast();
+  const confirmar = useConfirmar();
   const [membros, setMembros] = useState<Profile[]>([]);
   const [meuId, setMeuId] = useState<string | null>(null);
   const [nome, setNome] = useState(restaurante.nome);
@@ -43,7 +44,7 @@ export default function EquipeTab({ restaurante, onRefresh }: { restaurante: Res
   };
 
   const novoCodigo = async () => {
-    if (!window.confirm('Gerar um novo código? O código atual deixa de funcionar para novos cadastros.')) return;
+    if (!(await confirmar({ titulo: 'Gerar um novo código?', texto: 'O código atual deixa de funcionar para novos cadastros.', acao: 'Gerar novo código' }))) return;
     const { data, error } = await supabase.rpc('novo_codigo_convite');
     if (error) return toast(traduzErro(error.message), 'erro');
     setCodigo(data as string);
@@ -67,40 +68,40 @@ export default function EquipeTab({ restaurante, onRefresh }: { restaurante: Res
       <div className="grid md:grid-cols-2 gap-5 mb-6">
         <Card className="p-5">
           <div className="flex items-center gap-2 font-semibold text-[15px] mb-3"><Store size={17} /> Restaurante</div>
-          <label className="block text-[12.5px] font-semibold text-[#5A5344] mb-1.5">Nome</label>
+          <label className="block text-[12.5px] font-semibold text-pimenta-2 mb-1.5">Nome</label>
           <div className="flex gap-2">
             <input className={inputClass} value={nome} onChange={(e) => setNome(e.target.value)} />
             <PrimaryBtn onClick={renomear} icon={false} disabled={!nome.trim() || nome === restaurante.nome}>Salvar</PrimaryBtn>
           </div>
-          <div className="text-[13px] text-[#6B6355] mt-4">
+          <div className="text-[13px] text-pimenta-3 mt-4">
             Assinatura: {restaurante.pago_ate ? <>ativa até <b>{formatDatePt(restaurante.pago_ate)}</b></> : <b>ativa</b>}
           </div>
         </Card>
 
         <Card className="p-5">
           <div className="flex items-center gap-2 font-semibold text-[15px] mb-1"><Users size={17} /> Convidar funcionário</div>
-          <p className="text-[13px] text-[#6B6355] mt-0 mb-3">O funcionário se cadastra com este código, e você aprova aqui embaixo. Funcionários veem Caixa, Fechamento e Estoque, mas não veem relatórios nem contas.</p>
+          <p className="text-[13px] text-pimenta-3 mt-0 mb-3">O funcionário se cadastra com este código, e você aprova aqui embaixo. Funcionários veem Caixa, Fechamento e Estoque, mas não veem relatórios nem contas.</p>
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="font-mono text-[26px] font-bold tracking-[0.25em] text-green-dark bg-paper rounded-lg px-4 py-2">{codigo}</div>
+            <div className="tabular-nums text-[26px] font-bold tracking-[0.25em] text-pimenta bg-pele rounded-lg px-4 py-2">{codigo}</div>
             <GhostBtn onClick={copiar}><Copy size={15} /> Copiar convite</GhostBtn>
-            <button onClick={novoCodigo} className="text-[12.5px] font-semibold text-[#6B6355] bg-transparent border-none cursor-pointer flex items-center gap-1"><RefreshCw size={13} /> Gerar outro</button>
+            <button onClick={novoCodigo} className="pressionar min-h-[40px] md:min-h-0 px-2 -mx-2 rounded-lg text-[12.5px] font-semibold text-pimenta-2 bg-transparent border-none cursor-pointer flex items-center gap-1 hover:bg-pele"><RefreshCw size={13} /> Gerar outro</button>
           </div>
         </Card>
       </div>
 
       {pendentes.length > 0 && (
         <div className="mb-6">
-          <h3 className="font-serif text-[18px] font-bold text-green-dark mb-3">Aguardando sua aprovação ({pendentes.length})</h3>
+          <h3 className="font-display text-[18px] font-bold text-pimenta mb-3">Aguardando sua aprovação ({pendentes.length})</h3>
           <div className="flex flex-col gap-2">
             {pendentes.map((p) => (
               <Card key={p.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div>
                   <div className="font-semibold text-sm">{p.nome || p.email}</div>
-                  <div className="text-[12.5px] text-[#8A8270]">{p.email} · cadastrado em {formatDatePt(p.created_at)}</div>
+                  <div className="text-[12.5px] text-pimenta-3">{p.email} · cadastrado em {formatDatePt(p.created_at)}</div>
                 </div>
                 <div className="flex gap-2">
-                  <button disabled={busy === p.id} onClick={() => setStatus(p, 'aprovado')} className="flex items-center gap-1.5 bg-green text-[#F2EFE4] border-none px-3 py-2 rounded-md text-[13px] font-semibold cursor-pointer hover:bg-green-dark disabled:opacity-60"><Check size={14} /> Aprovar</button>
-                  <button disabled={busy === p.id} onClick={() => setStatus(p, 'recusado')} className="flex items-center gap-1.5 bg-white text-red border border-red/40 px-3 py-2 rounded-md text-[13px] font-semibold cursor-pointer hover:bg-red-bg disabled:opacity-60"><X size={14} /> Recusar</button>
+                  <button disabled={busy === p.id} onClick={() => setStatus(p, 'aprovado')} className="flex items-center gap-1.5 bg-urucum text-white border-none px-3 py-2 rounded-md text-[13px] font-semibold cursor-pointer hover:bg-urucum-dark disabled:opacity-60"><Check size={14} /> Aprovar</button>
+                  <button disabled={busy === p.id} onClick={() => setStatus(p, 'recusado')} className="flex items-center gap-1.5 bg-white text-erro border border-erro/40 px-3 py-2 rounded-md text-[13px] font-semibold cursor-pointer hover:bg-erro-bg disabled:opacity-60"><X size={14} /> Recusar</button>
                 </div>
               </Card>
             ))}
@@ -108,19 +109,21 @@ export default function EquipeTab({ restaurante, onRefresh }: { restaurante: Res
         </div>
       )}
 
-      <h3 className="font-serif text-[18px] font-bold text-green-dark mb-3">Com acesso ({ativos.length})</h3>
-      <Card className="divide-y divide-paper-line mb-6">
-        {ativos.length === 0 ? <EmptyState text="Ninguém ainda." /> : ativos.map((p) => (
+      <h3 className="font-display text-[18px] font-bold text-pimenta mb-3">Com acesso ({ativos.length})</h3>
+      <Card className="divide-y divide-linha mb-6">
+        {ativos.length === 0 ? <EmptyState title="Ninguém com acesso ainda" text="Envie o código de convite para seus funcionários." /> : ativos.map((p) => (
           <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
             <div className="min-w-0">
-              <div className="font-semibold truncate">{p.nome || p.email} {p.id === meuId && <span className="text-[#8A8270] font-normal">(você)</span>}</div>
-              <div className="text-[12.5px] text-[#8A8270] truncate">{p.email}</div>
+              <div className="font-semibold truncate">{p.nome || p.email} {p.id === meuId && <span className="text-pimenta-3 font-normal">(você)</span>}</div>
+              <div className="text-[12.5px] text-pimenta-3 truncate">{p.email}</div>
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <Badge tone={p.papel === 'dono' ? 'gold' : 'neutral'}>{p.papel === 'dono' ? 'Dono' : 'Funcionário'}</Badge>
               {p.papel === 'funcionario' && (
-                <button disabled={busy === p.id} onClick={() => window.confirm(`Remover o acesso de ${p.nome || p.email}?`) && setStatus(p, 'recusado')}
-                  className="text-[12.5px] font-semibold text-[#8A8270] hover:text-red bg-transparent border-none cursor-pointer">Remover</button>
+                <button disabled={busy === p.id} onClick={async () => {
+                  if (await confirmar({ titulo: `Remover o acesso de ${p.nome || p.email}?`, texto: 'A pessoa deixa de entrar no Painel. Você pode devolver o acesso depois.', acao: 'Remover acesso', perigo: true })) setStatus(p, 'recusado');
+                }}
+                  className="text-[12.5px] font-semibold text-pimenta-3 hover:text-erro bg-transparent border-none cursor-pointer">Remover</button>
               )}
             </div>
           </div>
@@ -129,12 +132,12 @@ export default function EquipeTab({ restaurante, onRefresh }: { restaurante: Res
 
       {recusados.length > 0 && (
         <>
-          <h3 className="font-serif text-[16px] font-bold text-green-dark mb-3">Sem acesso ({recusados.length})</h3>
-          <Card className="divide-y divide-paper-line">
+          <h3 className="font-display text-[16px] font-bold text-pimenta mb-3">Sem acesso ({recusados.length})</h3>
+          <Card className="divide-y divide-linha">
             {recusados.map((p) => (
               <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                <span className="text-[#6B6355] truncate">{p.nome || p.email}</span>
-                <button disabled={busy === p.id} onClick={() => setStatus(p, 'aprovado')} className="text-[12.5px] font-semibold text-teal bg-transparent border-none cursor-pointer">Devolver acesso</button>
+                <span className="text-pimenta-3 truncate">{p.nome || p.email}</span>
+                <button disabled={busy === p.id} onClick={() => setStatus(p, 'aprovado')} className="text-[12.5px] font-semibold text-louro bg-transparent border-none cursor-pointer">Devolver acesso</button>
               </div>
             ))}
           </Card>

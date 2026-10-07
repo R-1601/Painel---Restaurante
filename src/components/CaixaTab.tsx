@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Trash2, Settings, Search, Pencil, ArrowDownCircle, ArrowUpCircle, Receipt, Ban } from 'lucide-react';
+import { Trash2, Settings, Search, Pencil, ArrowDownCircle, ArrowUpCircle, Receipt, Ban, Wallet } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { traduzErro } from '../lib/data';
 import {
@@ -156,7 +156,7 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
     <div>
       <PageHeader title="Caixa" subtitle="Lance vendas e despesas do dia a dia.">
         {isDono && <GhostBtn onClick={() => { setTaxasEdit({}); setOpenTaxas(true); }}><Settings size={15} /> Taxas</GhostBtn>}
-        <button onClick={() => abrirNovo('saida')} className="flex items-center gap-1.5 bg-white text-red border border-red/40 px-3.5 py-2.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-red-bg transition-colors">
+        <button onClick={() => abrirNovo('saida')} className="pressionar flex items-center gap-1.5 bg-white text-erro border border-erro/40 px-3.5 min-h-[44px] md:min-h-[40px] rounded-xl text-sm font-semibold cursor-pointer hover:bg-erro-bg">
           <ArrowUpCircle size={16} /> Despesa
         </button>
         <PrimaryBtn onClick={() => abrirNovo('entrada')}>Venda</PrimaryBtn>
@@ -170,17 +170,17 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
         {periodo === 'custom' && (
           <div className="flex items-center gap-2">
             <input type="date" className={`${inputClass} md:w-[150px]`} value={de} onChange={(e) => setDe(e.target.value)} />
-            <span className="text-sm text-[#8A8270]">até</span>
+            <span className="text-sm text-pimenta-3">até</span>
             <input type="date" className={`${inputClass} md:w-[150px]`} value={ate} onChange={(e) => setAte(e.target.value)} />
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Stat label="Vendas (bruto)" value={formatBRL(totais.bruto)} hint={`${totais.vendas} venda${totais.vendas === 1 ? '' : 's'}`} color="#2F6F62" small />
-        <Stat label="Taxas" value={`− ${formatBRL(totais.taxas)}`} hint="maquininha / apps" color="#8A6D1E" small />
-        <Stat label="Despesas" value={`− ${formatBRL(totais.despesas)}`} color="#B33A3A" small />
-        <Stat label="Saldo do período" value={formatBRL(totais.saldo)} hint={tituloPeriodo} color={totais.saldo >= 0 ? '#2F6F62' : '#B33A3A'} small />
+        <Stat label="Vendas (bruto)" value={formatBRL(totais.bruto)} hint={`${totais.vendas} venda${totais.vendas === 1 ? '' : 's'}`} color="#56743F" small />
+        <Stat label="Taxas" value={`− ${formatBRL(totais.taxas)}`} hint="maquininha / apps" color="#8A5A00" small />
+        <Stat label="Despesas" value={`− ${formatBRL(totais.despesas)}`} color="#B3261E" small />
+        <Stat label="Saldo do período" value={formatBRL(totais.saldo)} hint={tituloPeriodo} color={totais.saldo >= 0 ? '#56743F' : '#B3261E'} small destaque />
       </div>
 
       <div className="flex flex-col md:flex-row gap-3 mb-3 md:items-center">
@@ -189,35 +189,46 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
           ...(isDono && excluidosPeriodo > 0 ? [{ id: 'excluidos' as Filtro, label: `Excluídos (${excluidosPeriodo})` }] : []),
         ]} />
         <div className="relative md:w-[280px]">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A8270]" />
-          <input className={`${inputClass} pl-9`} placeholder="Buscar descrição" value={busca} onChange={(e) => setBusca(e.target.value)} />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-pimenta-3" />
+          <input type="search" enterKeyHint="search" aria-label="Buscar lançamento" className={`${inputClass} pl-9`} placeholder="Buscar descrição" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
       </div>
 
       {lista.length === 0 ? (
         <TableWrap>
-          <EmptyState text={doPeriodo.length ? 'Nada encontrado com esse filtro.' : 'Nenhum lançamento neste período.'}>
-            {!doPeriodo.length && <PrimaryBtn onClick={() => abrirNovo('entrada')}>Lançar venda</PrimaryBtn>}
-          </EmptyState>
+          {doPeriodo.length ? (
+            <EmptyState icon={Search} title="Nada encontrado" text="Nenhum lançamento combina com a busca ou o filtro escolhido.">
+              <GhostBtn onClick={() => { setBusca(''); setFiltro('todos'); }}>Limpar busca e filtro</GhostBtn>
+            </EmptyState>
+          ) : (
+            <EmptyState icon={Wallet}
+              title={periodo === 'hoje' ? 'Nenhuma venda lançada hoje' : 'Nenhum lançamento neste período'}
+              text={periodo === 'hoje'
+                ? 'Toque em Venda a cada pedido. Leva poucos segundos, e o resumo e o fechamento do dia se montam sozinhos.'
+                : 'Escolha outro período acima ou lance uma venda agora.'}>
+              <PrimaryBtn onClick={() => abrirNovo('entrada')}>Lançar venda</PrimaryBtn>
+            </EmptyState>
+          )}
         </TableWrap>
       ) : (
         <>
           {/* Celular: cartões */}
           <div className="md:hidden flex flex-col gap-2">
             {lista.map((c) => (
-              <div key={c.id} className="bg-white border border-card-border rounded-lg p-3 flex items-center gap-3" onClick={() => abrirEdicao(c)}>
-                {c.tipo === 'entrada' ? <ArrowDownCircle size={22} className="text-teal shrink-0" /> : <ArrowUpCircle size={22} className="text-red shrink-0" />}
+              <button type="button" key={c.id} onClick={() => abrirEdicao(c)} disabled={!isDono || !!c.excluido_em}
+                className="pressionar w-full text-left font-sans text-pimenta bg-white border border-borda rounded-xl p-3 min-h-[60px] flex items-center gap-3 cursor-pointer disabled:cursor-default">
+                {c.tipo === 'entrada' ? <ArrowDownCircle size={22} className="text-louro shrink-0" /> : <ArrowUpCircle size={22} className="text-erro shrink-0" />}
                 <div className="flex-1 min-w-0">
-                  <div className={`font-semibold text-sm truncate ${c.excluido_em ? 'line-through text-[#8A8270]' : ''}`}>{c.descricao}</div>
-                  {c.excluido_em && <div className="text-[12px] text-red">Excluído: {c.motivo_exclusao}</div>}
-                  <div className="text-[12px] text-[#8A8270]">
+                  <div className={`font-semibold text-sm truncate ${c.excluido_em ? 'line-through text-pimenta-3' : ''}`}>{c.descricao}</div>
+                  {c.excluido_em && <div className="text-[12px] text-erro">Excluído: {c.motivo_exclusao}</div>}
+                  <div className="text-[12px] text-pimenta-3">
                     {formatDatePt(c.data)} · {c.tipo === 'entrada' ? `${labelOf(CANAIS_VENDA, c.canal)} · ${formaLabel(c.forma_pagamento)}` : labelOf(CATEGORIAS_DESPESA, c.categoria)}
                   </div>
                 </div>
-                <div className="font-mono font-semibold text-sm whitespace-nowrap" style={{ color: c.tipo === 'entrada' ? '#2F6F62' : '#B33A3A' }}>
+                <div className="tabular-nums font-semibold text-sm whitespace-nowrap" style={{ color: c.tipo === 'entrada' ? '#56743F' : '#B3261E' }}>
                   {c.tipo === 'entrada' ? '+' : '−'} {formatBRL(c.valor)}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -230,35 +241,35 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
                 </thead>
                 <tbody>
                   {lista.map((c) => (
-                    <tr key={c.id} className="hover:bg-[#FCFAF4]">
-                      <Td className="font-mono text-[#8A8270] whitespace-nowrap">{formatDatePt(c.data)}</Td>
+                    <tr key={c.id} className="hover:bg-pele/50">
+                      <Td className="tabular-nums text-pimenta-3 whitespace-nowrap">{formatDatePt(c.data)}</Td>
                       <Td>
-                        <div className={c.excluido_em ? 'line-through text-[#8A8270]' : ''}>{c.descricao}</div>
-                        {c.conta_id && <div className="text-[11.5px] text-[#8A8270] flex items-center gap-1 mt-0.5"><Receipt size={11} /> gerado pela conta paga</div>}
+                        <div className={c.excluido_em ? 'line-through text-pimenta-3' : ''}>{c.descricao}</div>
+                        {c.conta_id && <div className="text-[11.5px] text-pimenta-3 flex items-center gap-1 mt-0.5"><Receipt size={11} /> gerado pela conta paga</div>}
                         {c.excluido_em && (
-                          <div className="text-[12px] text-red flex items-center gap-1 mt-0.5">
+                          <div className="text-[12px] text-erro flex items-center gap-1 mt-0.5">
                             <Ban size={11} /> Excluído em {new Date(c.excluido_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}: {c.motivo_exclusao}
                           </div>
                         )}
                       </Td>
                       <Td>
                         <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap"
-                          style={{ background: c.tipo === 'entrada' ? '#E7F0EC' : '#F6E7E5', color: c.tipo === 'entrada' ? '#2F6F62' : '#B33A3A' }}>
+                          style={{ background: c.tipo === 'entrada' ? '#E6EEDD' : '#FBE0DA', color: c.tipo === 'entrada' ? '#56743F' : '#B3261E' }}>
                           {c.tipo === 'entrada' ? labelOf(CANAIS_VENDA, c.canal) : labelOf(CATEGORIAS_DESPESA, c.categoria)}
                         </span>
                       </Td>
-                      <Td className="text-[#8A8270] text-[13px] whitespace-nowrap">
+                      <Td className="text-pimenta-3 text-[13px] whitespace-nowrap">
                         {formaLabel(c.forma_pagamento)}{c.tipo === 'entrada' && Number(c.taxa) > 0 ? ` (${String(c.taxa).replace(".", ",")}%)` : ''}
                       </Td>
-                      <Td className="font-mono text-right whitespace-nowrap text-[#8A8270]">{formatBRL(c.valor)}</Td>
-                      <Td className="font-mono font-semibold text-right whitespace-nowrap" style={{ color: c.tipo === 'entrada' ? '#2F6F62' : '#B33A3A' }}>
+                      <Td className="tabular-nums text-right whitespace-nowrap text-pimenta-3">{formatBRL(c.valor)}</Td>
+                      <Td className="tabular-nums font-semibold text-right whitespace-nowrap" style={{ color: c.tipo === 'entrada' ? '#56743F' : '#B3261E' }}>
                         {c.tipo === 'entrada' ? '+' : '−'} {formatBRL(valorLiquido(c))}
                       </Td>
                       <Td>
                         {isDono && !c.excluido_em && !c.conta_id && (
                           <div className="flex justify-end">
                             <IconBtn onClick={() => abrirEdicao(c)} title="Editar"><Pencil size={15} /></IconBtn>
-                            <IconBtn onClick={() => remover(c)} color="#B33A3A" title="Excluir"><Trash2 size={15} /></IconBtn>
+                            <IconBtn onClick={() => remover(c)} color="#B3261E" title="Excluir"><Trash2 size={15} /></IconBtn>
                           </div>
                         )}
                       </Td>
@@ -276,11 +287,11 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
           <div className="flex gap-2">
             {(['entrada', 'saida'] as const).map((t) => (
               <button key={t} onClick={() => setForm({ ...form, tipo: t, forma_pagamento: t === 'saida' && !form.id ? 'dinheiro' : form.forma_pagamento })}
-                className="flex-1 py-2 rounded-md cursor-pointer font-semibold text-[13.5px] transition-colors"
+                className="pressionar flex-1 min-h-[44px] md:min-h-[40px] rounded-lg cursor-pointer font-semibold text-[13.5px]"
                 style={{
-                  border: `1px solid ${form.tipo === t ? '#163A2E' : '#DAD2BC'}`,
-                  background: form.tipo === t ? '#163A2E' : '#FCFAF4',
-                  color: form.tipo === t ? '#F2EFE4' : '#20291F',
+                  border: `1px solid ${form.tipo === t ? '#C2410C' : '#EAD5C7'}`,
+                  background: form.tipo === t ? '#C2410C' : '#FFFFFF',
+                  color: form.tipo === t ? '#FFFFFF' : '#3A2318',
                 }}>
                 {t === 'entrada' ? 'Venda (entrada)' : 'Despesa (saída)'}
               </button>
@@ -321,7 +332,7 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
             ))}
           </div>
           {form.tipo === 'saida' && form.forma_pagamento === 'dinheiro' && (
-            <p className="text-[12px] text-[#8A8270] mt-1.5 mb-0">Despesas em dinheiro são descontadas da gaveta no fechamento de caixa.</p>
+            <p className="text-[12px] text-pimenta-3 mt-1.5 mb-0">Despesas em dinheiro são descontadas da gaveta no fechamento de caixa.</p>
           )}
 
           <FieldLabel>Data</FieldLabel>
@@ -331,7 +342,7 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
             <PrimaryBtn onClick={() => salvar(false)} disabled={salvando} icon={false} full>{salvando ? 'Salvando...' : 'Salvar'}</PrimaryBtn>
             {!form.id && (
               <button onClick={() => salvar(true)} disabled={salvando}
-                className="w-full bg-white text-green-dark border border-green px-4 py-2.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-teal-bg disabled:opacity-60">
+                className="pressionar w-full bg-white text-pimenta border border-urucum px-4 min-h-[44px] md:min-h-[40px] rounded-xl text-sm font-semibold cursor-pointer hover:bg-urucum-bg disabled:opacity-60">
                 Salvar e lançar outra
               </button>
             )}
@@ -339,7 +350,7 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
           {form.id && (
             <button
               onClick={() => { const c = caixa.find((x) => x.id === form.id); if (c) { setOpen(false); remover(c); } }}
-              className="mt-3 w-full flex items-center justify-center gap-1.5 bg-transparent border-none text-red text-[13px] font-semibold cursor-pointer"
+              className="pressionar mt-2 w-full min-h-[44px] flex items-center justify-center gap-1.5 bg-transparent border-none text-erro text-[13px] font-semibold cursor-pointer rounded-xl hover:bg-erro-bg"
             >
               <Trash2 size={14} /> Excluir lançamento
             </button>
@@ -349,14 +360,14 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
 
       {excluir && (
         <Modal title="Excluir lançamento" onClose={() => setExcluir(null)}>
-          <p className="text-[14px] text-[#5A5344] mt-0">
+          <p className="text-[14px] text-pimenta-2 mt-0">
             <b>{excluir.item.descricao}</b> · {formatBRL(excluir.item.valor)} · {formatDatePt(excluir.item.data)}
           </p>
-          <p className="text-[13px] text-[#8A8270]">O lançamento sai das contas, mas fica guardado no histórico de excluídos com o motivo.</p>
+          <p className="text-[13px] text-pimenta-3">O lançamento sai das contas, mas fica guardado no histórico de excluídos com o motivo.</p>
           <FieldLabel>Motivo</FieldLabel>
           <input className={inputClass} autoFocus value={excluir.motivo} onChange={(e) => setExcluir({ ...excluir, motivo: e.target.value })} placeholder="Ex: lançado em dobro, valor errado" />
           <button onClick={confirmarExclusao} disabled={salvando}
-            className="mt-5 w-full bg-red text-white border-none px-4 py-2.5 rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-60">
+            className="pressionar mt-5 w-full bg-erro text-white border-none px-4 min-h-[44px] rounded-xl text-sm font-semibold cursor-pointer hover:bg-[#962019] disabled:opacity-60">
             {salvando ? 'Excluindo...' : 'Excluir lançamento'}
           </button>
         </Modal>
@@ -364,18 +375,19 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
 
       {openTaxas && (
         <Modal title="Taxas por forma de pagamento" onClose={() => setOpenTaxas(false)}>
-          <p className="text-[13px] text-[#8A8270] mt-0">Percentual descontado por cada forma de pagamento (maquininha, iFood etc.). A mudança vale para os próximos lançamentos.</p>
+          <p className="text-[13px] text-pimenta-3 mt-0">Percentual descontado por cada forma de pagamento (maquininha, iFood etc.). A mudança vale para os próximos lançamentos.</p>
           {formasPagamento.map((f) => (
             <div key={f.id} className="flex items-center justify-between mb-2.5">
               <span className="text-sm">{f.label}</span>
               <div className="flex items-center gap-1.5">
                 <input
                   inputMode="decimal"
-                  className="w-[80px] px-2 py-1.5 rounded-md border border-card-border text-sm bg-[#FCFAF4] font-mono text-right focus:outline-none focus:border-green focus:ring-1 focus:ring-green"
+                  aria-label={`Taxa de ${f.label} em %`}
+                  className="w-[84px] px-2 py-2 md:py-1.5 rounded-lg border border-borda text-[16px] md:text-sm bg-white tabular-nums text-right focus:outline-none focus:border-urucum focus:ring-1 focus:ring-urucum"
                   value={taxasEdit[f.id] ?? String(f.taxa).replace('.', ',')}
                   onChange={(e) => setTaxasEdit({ ...taxasEdit, [f.id]: e.target.value.replace(/[^\d.,]/g, '') })}
                 />
-                <span className="text-[13px] text-[#8A8270]">%</span>
+                <span className="text-[13px] text-pimenta-3">%</span>
               </div>
             </div>
           ))}
@@ -389,7 +401,8 @@ export default function CaixaTab({ caixa, setCaixa, formasPagamento, setFormasPa
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick}
-      className={`py-2 px-2 rounded-md text-[13px] font-semibold cursor-pointer border transition-colors ${active ? 'bg-green text-[#F2EFE4] border-green' : 'bg-[#FCFAF4] text-ink border-card-border hover:border-green'}`}>
+      aria-pressed={active}
+      className={`pressionar min-h-[44px] md:min-h-[38px] px-2 rounded-lg text-[13px] font-semibold cursor-pointer border ${active ? 'bg-urucum text-white border-urucum' : 'bg-white text-pimenta border-borda hover:border-urucum'}`}>
       {children}
     </button>
   );

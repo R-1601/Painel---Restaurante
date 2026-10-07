@@ -35,7 +35,7 @@ const CONTEUDO: Record<Exclude<Acesso, 'ok'>, { icon: typeof Clock; tone: 'teal'
   },
 };
 
-const TONES = { teal: 'bg-teal-bg text-teal', red: 'bg-red-bg text-red', gold: 'bg-[#F5E9C8] text-[#8A6D1E]' };
+const TONES = { teal: 'bg-louro-bg text-louro', red: 'bg-erro-bg text-erro', gold: 'bg-acafrao-bg text-acafrao-dark' };
 
 export function AcessoScreen({ acesso, email, restaurante, onSignOut, onRefresh }: {
   acesso: Exclude<Acesso, 'ok'>; email: string; restaurante: Restaurante | null; onSignOut: () => void; onRefresh: () => Promise<void>;
@@ -51,18 +51,18 @@ export function AcessoScreen({ acesso, email, restaurante, onSignOut, onRefresh 
       <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${TONES[c.tone]}`}>
         <Icon size={26} />
       </div>
-      <h2 className="font-serif text-[22px] font-bold text-green-dark m-0 mb-2">{c.titulo}</h2>
-      <p className="text-[14px] text-[#5A5344] leading-relaxed max-w-[360px] mx-auto">{c.texto(restaurante)}</p>
+      <h2 className="font-display text-[22px] font-bold text-pimenta m-0 mb-2">{c.titulo}</h2>
+      <p className="text-[14px] text-pimenta-2 leading-relaxed max-w-[360px] mx-auto">{c.texto(restaurante)}</p>
       <div className="flex flex-col gap-2 mt-5">
         {mostraSuporte && (
           <a href={`https://wa.me/${WHATSAPP}?text=${msg}`} target="_blank" rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 bg-green text-[#F2EFE4] px-4 py-2.5 rounded-lg text-sm font-semibold no-underline hover:bg-green-dark">
+            className="inline-flex items-center justify-center gap-2 bg-urucum text-white px-4 py-2.5 rounded-lg text-sm font-semibold no-underline hover:bg-urucum-dark">
             <MessageCircle size={16} /> Falar com o suporte
           </a>
         )}
         <button
           onClick={async () => { setChecando(true); await onRefresh(); setChecando(false); }}
-          className="inline-flex items-center justify-center gap-2 bg-white text-ink border border-card-border px-4 py-2.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-paper"
+          className="inline-flex items-center justify-center gap-2 bg-white text-pimenta border border-borda px-4 py-2.5 rounded-lg text-sm font-semibold cursor-pointer hover:bg-pele"
         >
           <RefreshCw size={15} className={checando ? 'animate-spin' : ''} /> Já liberaram? Verificar de novo
         </button>
@@ -85,12 +85,12 @@ export function NovaSenhaScreen({ email, onDone }: { email: string; onDone: () =
   };
   return (
     <Shell email={email} onSignOut={() => supabase.auth.signOut()}>
-      <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-teal-bg text-teal"><KeyRound size={26} /></div>
-      <h2 className="font-serif text-[22px] font-bold text-green-dark m-0 mb-4">Criar nova senha</h2>
+      <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-louro-bg text-louro"><KeyRound size={26} /></div>
+      <h2 className="font-display text-[22px] font-bold text-pimenta m-0 mb-4">Criar nova senha</h2>
       <input type="password" className={inputClass} value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Nova senha (mín. 6 caracteres)" autoComplete="new-password" />
-      {erro && <div className="text-[12.5px] text-red bg-red-bg px-3 py-2 rounded-md mt-3 text-left">{erro}</div>}
+      {erro && <div className="text-[12.5px] text-erro bg-erro-bg px-3 py-2 rounded-md mt-3 text-left">{erro}</div>}
       <button onClick={salvar} disabled={loading}
-        className="w-full mt-4 bg-green text-[#F2EFE4] border-none px-4 py-3 rounded-lg text-sm font-semibold cursor-pointer hover:bg-green-dark disabled:opacity-60">
+        className="w-full mt-4 bg-urucum text-white border-none px-4 py-3 rounded-lg text-sm font-semibold cursor-pointer hover:bg-urucum-dark disabled:opacity-60">
         {loading ? 'Salvando...' : 'Salvar nova senha'}
       </button>
     </Shell>
@@ -99,15 +99,15 @@ export function NovaSenhaScreen({ email, onDone }: { email: string; onDone: () =
 
 function Shell({ email, onSignOut, children }: { email: string; onSignOut: () => void; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-paper flex items-center justify-center font-sans text-ink px-4">
+    <div className="min-h-screen bg-pele flex items-center justify-center font-sans text-pimenta px-4">
       <div className="w-full max-w-[420px] text-center">
-        <div className="font-serif text-[24px] font-bold text-green-dark mb-6">Painel do Restaurante</div>
-        <div className="bg-white rounded-xl border border-card-border p-6 md:p-8 shadow-sm">
+        <div className="font-display text-[24px] font-bold text-pimenta mb-6">Painel do Restaurante</div>
+        <div className="bg-white rounded-xl border border-borda p-6 md:p-8 shadow-sm">
           {children}
-          <div className="mt-5 pt-4 border-t border-paper-line text-[12px] text-[#8A8270]">Conta: {email}</div>
+          <div className="mt-5 pt-4 border-t border-linha text-[12px] text-pimenta-3">Conta: {email}</div>
           <button
             onClick={onSignOut}
-            className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#5A5344] hover:text-green-dark bg-transparent border-none cursor-pointer"
+            className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-pimenta-2 hover:text-pimenta bg-transparent border-none cursor-pointer"
           >
             <LogOut size={15} /> Sair
           </button>
