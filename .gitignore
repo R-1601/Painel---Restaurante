@@ -21,3 +21,6 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Prints e logs do Playwright
+.playwright-mcp

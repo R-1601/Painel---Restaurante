@@ -1,0 +1,15 @@
+# Publicação no Netlify a partir do GitHub
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Versão do Node usada no build (a mesma família usada no computador de desenvolvimento)
+  NODE_VERSION = "22"
+
+# O app é uma página só: qualquer endereço abre o index.html e o React decide a tela
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
